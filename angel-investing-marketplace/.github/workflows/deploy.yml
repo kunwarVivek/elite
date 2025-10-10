@@ -1,0 +1,266 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*.*.*' ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+        - production
+        - staging
+
+env:
+  REGISTRY: docker.io
+  BACKEND_IMAGE: angel-investing/backend
+  FRONTEND_IMAGE: angel-investing/frontend
+  HELM_CHART: ./k8s/charts/angel-investing-marketplace
+
+jobs:
+  # Security scanning and testing
+  security-and-tests:
+    name: Security Scan and Tests
+    runs-on: ubuntu-latest
+    outputs:
+      backend-image-tag: ${{ steps.meta.outputs.tags }}
+      frontend-image-tag: ${{ steps.meta.outputs.tags }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: |
+          backend/package-lock.json
+          frontend/package-lock.json
+
+    - name: Install dependencies
+      run: |
+        cd backend && npm ci
+        cd ../frontend && npm ci
+
+    - name: Run backend tests
+      run: |
+        cd backend && npm run test
+
+    - name: Run frontend tests
+      run: |
+        cd frontend && npm run test
+
+    - name: Run linting
+      run: |
+        cd backend && npm run lint
+        cd frontend && npm run lint
+
+    - name: Security scan - Backend
+      uses: securecodewarrior/github-action-sast@master
+      with:
+        language: javascript
+        path: backend/
+      continue-on-error: true
+
+    - name: Security scan - Frontend
+      uses: securecodewarrior/github-action-sast@master
+      with:
+        language: javascript
+        path: frontend/
+      continue-on-error: true
+
+    - name: Docker metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: |
+          ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}
+          ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+  # Build and push Docker images
+  build-and-push:
+    name: Build and Push Images
+    runs-on: ubuntu-latest
+    needs: security-and-tests
+    permissions:
+      contents: read
+      packages: write
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Build and push Backend
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: docker/Dockerfile.backend
+        target: production
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ needs.security-and-tests.outputs.backend-image-tag }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        labels: |
+          org.opencontainers.image.title=Angel Investing Backend
+          org.opencontainers.image.description=Backend API for Angel Investing Marketplace
+          org.opencontainers.image.vendor=Angel Investing Marketplace
+
+    - name: Build and push Frontend
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: docker/Dockerfile.frontend
+        target: production
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ needs.security-and-tests.outputs.frontend-image-tag }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        labels: |
+          org.opencontainers.image.title=Angel Investing Frontend
+          org.opencontainers.image.description=Frontend React app for Angel Investing Marketplace
+          org.opencontainers.image.vendor=Angel Investing Marketplace
+
+    - name: Scan images for vulnerabilities
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: |
+          ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ needs.security-and-tests.outputs.backend-image-tag }}
+          ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ needs.security-and-tests.outputs.frontend-image-tag }}
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # Deploy to Kubernetes
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: [security-and-tests, build-and-push]
+    environment: production
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure kubectl
+      uses: azure/k8s-set-context@v3
+      with:
+        method: kubeconfig
+        kubeconfig: ${{ secrets.KUBE_CONFIG }}
+
+    - name: Update Helm dependencies
+      run: |
+        cd k8s/charts/angel-investing-marketplace
+        helm dependency update
+
+    - name: Deploy with Helm
+      run: |
+        cd k8s/charts/angel-investing-marketplace
+        helm upgrade --install angel-investing-marketplace . \
+          --namespace angel-investing-marketplace \
+          --create-namespace \
+          --set backend.image.tag=${{ needs.security-and-tests.outputs.backend-image-tag }} \
+          --set frontend.image.tag=${{ needs.security-and-tests.outputs.frontend-image-tag }} \
+          --set backend.image.registry=${{ env.REGISTRY }} \
+          --set frontend.image.registry=${{ env.REGISTRY }} \
+          --values values-production.yaml \
+          --wait \
+          --timeout 10m
+
+    - name: Verify deployment
+      run: |
+        kubectl rollout status deployment/backend -n angel-investing-marketplace --timeout=5m
+        kubectl rollout status deployment/frontend -n angel-investing-marketplace --timeout=5m
+        kubectl rollout status statefulset/postgres -n angel-investing-marketplace --timeout=5m
+        kubectl rollout status deployment/redis -n angel-investing-marketplace --timeout=5m
+
+    - name: Run health checks
+      run: |
+        # Check backend health
+        kubectl port-forward svc/backend-service 3001:3001 -n angel-investing-marketplace &
+        sleep 5
+        curl -f http://localhost:3001/health || exit 1
+
+        # Check frontend health
+        kubectl port-forward svc/frontend-service 8080:80 -n angel-investing-marketplace &
+        sleep 5
+        curl -f http://localhost:8080/health || exit 1
+
+        # Check database connectivity
+        kubectl exec postgres-0 -n angel-investing-marketplace -- pg_isready -U $(kubectl get secret angel-investing-secrets -n angel-investing-marketplace -o jsonpath='{.data.POSTGRES_USER}' | base64 -d)
+
+    - name: Run smoke tests
+      run: |
+        # Basic smoke tests
+        curl -f https://api.angelinvesting.market/health || exit 1
+        curl -f https://app.angelinvesting.market/health || exit 1
+
+    - name: Notify deployment success
+      if: success()
+      run: |
+        echo "🚀 Deployment successful!"
+        echo "Backend: https://api.angelinvesting.market"
+        echo "Frontend: https://app.angelinvesting.market"
+        echo "Grafana: https://grafana.angelinvesting.market"
+
+    - name: Rollback on failure
+      if: failure()
+      run: |
+        echo "❌ Deployment failed, initiating rollback..."
+        cd k8s/charts/angel-investing-marketplace
+        helm rollback angel-investing-marketplace --namespace angel-investing-marketplace
+
+        # Notify team about rollback
+        echo "Deployment failed and rolled back. Check logs for details."
+        exit 1
+
+  # Post-deployment monitoring
+  monitoring:
+    name: Post-deployment Monitoring
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: success()
+    steps:
+    - name: Wait for metrics
+      run: |
+        sleep 120  # Wait for metrics to be available
+
+    - name: Check application metrics
+      run: |
+        # Query Prometheus for basic metrics
+        curl -s http://prometheus.angelinvesting.market/api/v1/query?query=up | jq '.data.result[].value[1]' | grep -q '1'
+
+    - name: Generate deployment report
+      run: |
+        echo "## Deployment Report" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Backend Image:** ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ needs.security-and-tests.outputs.backend-image-tag }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Frontend Image:** ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ needs.security-and-tests.outputs.frontend-image-tag }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Deployed at:** $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Status:** ✅ Successful" >> $GITHUB_STEP_SUMMARY

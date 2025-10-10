@@ -1,0 +1,243 @@
+global:
+  # Default SMTP configuration for email alerts
+  smtp_smarthost: 'smtp.gmail.com:587'
+  smtp_from: 'alerts@angelinvesting.market'
+  smtp_auth_username: 'alerts@angelinvesting.market'
+  smtp_auth_password_file: '/run/secrets/smtp_password'
+
+route:
+  group_by: ['alertname', 'severity']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'default-receiver'
+
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 5s
+      repeat_interval: 15m
+
+    # Security alerts - immediate escalation
+    - match:
+        category: security
+      receiver: 'security-team'
+      group_wait: 5s
+      repeat_interval: 10m
+
+    # Compliance alerts - immediate legal team notification
+    - match:
+        category: compliance
+      receiver: 'compliance-team'
+      group_wait: 5s
+      repeat_interval: 30m
+
+    # SLA violations - immediate management notification
+    - match:
+        category: sla
+      receiver: 'management-team'
+      group_wait: 5s
+      repeat_interval: 5m
+
+    # Business impact alerts
+    - match:
+        category: business
+      receiver: 'business-team'
+      repeat_interval: 30m
+
+    # Performance warnings
+    - match:
+        severity: warning
+        category: performance
+      receiver: 'devops-team'
+      repeat_interval: 2h
+
+    # Infrastructure warnings
+    - match:
+        severity: warning
+        category: infrastructure
+      receiver: 'devops-team'
+      repeat_interval: 4h
+
+inhibit_rules:
+  # Inhibit warning alerts if critical alert with same name exists
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname']
+
+receivers:
+  - name: 'default-receiver'
+    email_configs:
+      - to: 'devops@angelinvesting.market'
+        subject: 'Angel Investing Marketplace - Alert Notification'
+        body: |
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Severity: {{ .Labels.severity }}
+          Service: {{ .Labels.service }}
+          Time: {{ .StartsAt }}
+          {{ if .Annotations.runbook_url }}Runbook: {{ .Annotations.runbook_url }}{{ end }}
+          {{ end }}
+
+  - name: 'critical-alerts'
+    email_configs:
+      - to: 'critical-alerts@angelinvesting.market'
+        subject: '🚨 CRITICAL: Angel Investing Marketplace Alert'
+        body: |
+          🚨 CRITICAL ALERT REQUIRES IMMEDIATE ATTENTION
+
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Impact: {{ .Annotations.impact }}
+          Action Required: {{ .Annotations.action }}
+          Service: {{ .Labels.service }}
+          Started: {{ .StartsAt }}
+          {{ if .Annotations.runbook_url }}Runbook: {{ .Annotations.runbook_url }}{{ end }}
+          {{ end }}
+
+          This alert may impact the 99.9% uptime SLA.
+
+    slack_configs:
+      - api_url_file: '/run/secrets/slack_webhook'
+        channel: '#critical-alerts'
+        title: '🚨 Critical Alert - Angel Investing Marketplace'
+        text: |
+          🚨 CRITICAL ALERT REQUIRES IMMEDIATE ATTENTION
+
+          {{ range .Alerts }}{{ .Annotations.summary }}
+          {{ .Annotations.description }}
+
+          Impact: {{ .Annotations.impact }}
+          Action: {{ .Annotations.action }}
+          {{ end }}
+
+  - name: 'security-team'
+    email_configs:
+      - to: 'security@angelinvesting.market'
+        subject: '🔒 SECURITY ALERT: Angel Investing Marketplace'
+        body: |
+          🔒 SECURITY ALERT - IMMEDIATE ATTENTION REQUIRED
+
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Impact: {{ .Annotations.impact }}
+          Action Required: {{ .Annotations.action }}
+          Category: {{ .Labels.category }}
+          Started: {{ .StartsAt }}
+          {{ end }}
+
+    slack_configs:
+      - api_url_file: '/run/secrets/slack_webhook'
+        channel: '#security-alerts'
+        title: '🔒 Security Alert'
+        text: |
+          🔒 SECURITY ALERT
+
+          {{ range .Alerts }}{{ .Annotations.summary }}
+          {{ .Annotations.description }}
+
+          Action Required: {{ .Annotations.action }}
+          {{ end }}
+
+    pagerduty_configs:
+      - routing_key_file: '/run/secrets/pagerduty_routing_key'
+
+  - name: 'compliance-team'
+    email_configs:
+      - to: 'compliance@angelinvesting.market'
+        subject: '⚖️ COMPLIANCE ALERT: Angel Investing Marketplace'
+        body: |
+          ⚖️ COMPLIANCE ALERT - LEGAL REVIEW REQUIRED
+
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Compliance Impact: {{ .Annotations.impact }}
+          Action Required: {{ .Annotations.action }}
+          Category: {{ .Labels.category }}
+          Started: {{ .StartsAt }}
+          {{ end }}
+
+          This may affect SOC 2, PCI DSS, GDPR, or CCPA compliance.
+
+  - name: 'management-team'
+    email_configs:
+      - to: 'management@angelinvesting.market'
+        subject: '📊 SLA ALERT: Angel Investing Marketplace'
+        body: |
+          📊 SLA VIOLATION ALERT - MANAGEMENT ATTENTION REQUIRED
+
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Business Impact: {{ .Annotations.impact }}
+          Action Required: {{ .Annotations.action }}
+          Started: {{ .StartsAt }}
+          {{ end }}
+
+          This alert indicates a potential 99.9% uptime SLA violation.
+
+    slack_configs:
+      - api_url_file: '/run/secrets/slack_webhook'
+        channel: '#sla-monitoring'
+        title: '📊 SLA Alert'
+        text: |
+          📊 SLA VIOLATION DETECTED
+
+          {{ range .Alerts }}{{ .Annotations.summary }}
+          {{ .Annotations.description }}
+
+          Business Impact: {{ .Annotations.impact }}
+          {{ end }}
+
+  - name: 'business-team'
+    email_configs:
+      - to: 'business-ops@angelinvesting.market'
+        subject: '💼 BUSINESS ALERT: Angel Investing Marketplace'
+        body: |
+          💼 BUSINESS OPERATIONS ALERT
+
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Business Impact: {{ .Annotations.impact }}
+          Action Required: {{ .Annotations.action }}
+          Category: {{ .Labels.category }}
+          {{ end }}
+
+  - name: 'devops-team'
+    email_configs:
+      - to: 'devops@angelinvesting.market'
+        subject: '🔧 DEVOPS ALERT: Angel Investing Marketplace'
+        body: |
+          🔧 DEVOPS MAINTENANCE ALERT
+
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Action Required: {{ .Annotations.action }}
+          Category: {{ .Labels.category }}
+          Severity: {{ .Labels.severity }}
+          {{ end }}
+
+    slack_configs:
+      - api_url_file: '/run/secrets/slack_webhook'
+        channel: '#devops-alerts'
+        title: '🔧 DevOps Alert'
+        text: |
+          {{ range .Alerts }}{{ .Annotations.summary }}
+          {{ .Annotations.description }}
+
+          Action: {{ .Annotations.action }}
+          {{ end }}
+
+# Templates for custom notification formatting
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'

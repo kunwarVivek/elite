@@ -1,0 +1,225 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: angel-investing-marketplace
+  labels:
+    app: backend
+    component: api
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: backend
+      component: api
+  template:
+    metadata:
+      labels:
+        app: backend
+        component: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3001"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: backend
+        image: angel-investing-backend:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3001
+          name: http
+        - containerPort: 9090
+          name: metrics
+        env:
+        # Application Configuration
+        - name: NODE_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: angel-investing-config
+              key: NODE_ENV
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: angel-investing-config
+              key: PORT
+        - name: API_VERSION
+          valueFrom:
+            configMapKeyRef:
+              name: angel-investing-config
+              key: API_VERSION
+
+        # Database Configuration
+        - name: DATABASE_URL
+          value: postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=require
+        - name: POSTGRES_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: angel-investing-config
+              key: POSTGRES_HOST
+        - name: POSTGRES_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: angel-investing-config
+              key: POSTGRES_PORT
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: angel-investing-config
+              key: POSTGRES_DB
+        - name: DATABASE_POOL_MIN
+          valueFrom:
+            configMapKeyRef:
+              name: angel-investing-config
+              key: DATABASE_POOL_MIN
+        - name: DATABASE_POOL_MAX
+          valueFrom:
+            configMapKeyRef:
+              name: angel-investing-config
+              key: DATABASE_POOL_MAX
+
+        # Redis Configuration
+        - name: REDIS_URL
+          value: redis://:$(REDIS_PASSWORD)@$(REDIS_HOST):$(REDIS_PORT)/$(REDIS_DB)
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: angel-investing-config
+              key: REDIS_HOST
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: angel-investing-config
+              key: REDIS_PORT
+        - name: REDIS_DB
+          valueFrom:
+            configMapKeyRef:
+              name: angel-investing-config
+              key: REDIS_DB
+
+        # Secrets from Kubernetes secrets
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: angel-investing-secrets
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: angel-investing-secrets
+              key: POSTGRES_PASSWORD
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: angel-investing-secrets
+              key: REDIS_PASSWORD
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: angel-investing-secrets
+              key: JWT_SECRET
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: angel-investing-secrets
+              key: ENCRYPTION_KEY
+        - name: STRIPE_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: angel-investing-secrets
+              key: STRIPE_SECRET_KEY
+        - name: STRIPE_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: angel-investing-secrets
+              key: STRIPE_WEBHOOK_SECRET
+        - name: CLOUDFLARE_R2_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: angel-investing-secrets
+              key: CLOUDFLARE_R2_ACCESS_KEY
+        - name: CLOUDFLARE_R2_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: angel-investing-secrets
+              key: CLOUDFLARE_R2_SECRET_KEY
+        - name: EMAIL_SERVICE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: angel-investing-secrets
+              key: EMAIL_SERVICE_API_KEY
+
+        # Monitoring Configuration
+        - name: PROMETHEUS_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: angel-investing-config
+              key: PROMETHEUS_ENABLED
+        - name: METRICS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: angel-investing-config
+              key: METRICS_PORT
+
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3001
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3001
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+      volumes:
+      - name: logs
+        emptyDir: {}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: angel-investing-marketplace
+  labels:
+    app: backend
+    component: api
+spec:
+  selector:
+    app: backend
+    component: api
+  ports:
+  - port: 3001
+    targetPort: 3001
+    name: http
+  - port: 9090
+    targetPort: 9090
+    name: metrics
+  type: ClusterIP

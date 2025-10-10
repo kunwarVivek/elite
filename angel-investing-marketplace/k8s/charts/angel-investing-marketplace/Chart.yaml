@@ -1,0 +1,30 @@
+apiVersion: v2
+name: angel-investing-marketplace
+description: A Helm chart for Angel Investing Marketplace application
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - angel-investing
+  - marketplace
+  - fintech
+  - kubernetes
+home: https://angelinvesting.market
+sources:
+  - https://github.com/angel-investing/marketplace
+maintainers:
+  - name: DevOps Team
+    email: devops@angelinvesting.market
+dependencies:
+  - name: prometheus
+    version: "15.0.0"
+    repository: "https://prometheus-community.github.io/helm-charts"
+    condition: prometheus.enabled
+  - name: grafana
+    version: "6.50.0"
+    repository: "https://grafana.github.io/helm-charts"
+    condition: grafana.enabled
+  - name: cert-manager
+    version: "v1.13.0"
+    repository: "https://charts.jetstack.io"
+    condition: cert-manager.enabled

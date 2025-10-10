@@ -1,0 +1,63 @@
+// Use Prisma schema field names (not snake_case)
+export const mockUsers = {
+  investor: {
+    id: 'user-investor-1',
+    email: 'investor@example.com',
+    name: 'Test Investor',
+    role: 'INVESTOR' as any,
+    avatarUrl: null,
+    profileData: null,
+    isVerified: true,
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+  },
+  founder: {
+    id: 'user-founder-1',
+    email: 'founder@example.com',
+    name: 'Test Founder',
+    role: 'FOUNDER' as any,
+    avatarUrl: null,
+    profileData: null,
+    isVerified: true,
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+  },
+  syndicateLead: {
+    id: 'user-syndicate-lead-1',
+    email: 'syndicate@example.com',
+    name: 'Test Syndicate Lead',
+    role: 'SYNDICATE_LEAD' as any,
+    avatarUrl: null,
+    profileData: null,
+    isVerified: true,
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+  },
+  admin: {
+    id: 'user-admin-1',
+    email: 'admin@example.com',
+    name: 'Test Admin',
+    role: 'ADMIN' as any,
+    avatarUrl: null,
+    profileData: null,
+    isVerified: true,
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+  },
+  unverified: {
+    id: 'user-unverified-1',
+    email: 'unverified@example.com',
+    name: 'Test Unverified',
+    role: 'INVESTOR' as any,
+    avatarUrl: null,
+    profileData: null,
+    isVerified: false,
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+  },
+};
+
+export const createMockUser = (overrides: any = {}) => ({
+  ...mockUsers.investor,
+  ...overrides,
+});

@@ -1,0 +1,1326 @@
+// Prisma schema for Angel Investing Marketplace
+// Complete database schema based on database-schema.md specifications
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// CORE USER MANAGEMENT
+// ============================================================================
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String?
+  password      String?
+  emailVerified Boolean  @default(false)
+  image         String?
+  role          UserRole @default(INVESTOR)
+  avatarUrl     String?
+  profileData   Json?
+  isVerified    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  foundedStartups           Startup[]             @relation("StartupFounder")
+  investments               Investment[]
+  portfolios                Portfolio[]
+  sentMessages              Message[]             @relation("MessageSender")
+  receivedMessages          Message[]             @relation("MessageReceiver")
+  notifications             Notification[]
+  comments                  Comment[]
+  uploadedDocuments         Document[]            @relation("DocumentUploader")
+  transactions              Transaction[]
+  auditLogs                 AuditLog[]
+  userProfile               UserProfile?
+  syndicateLedInvestments   Investment[]          @relation("SyndicateLead")
+  sessions                  Session[]
+  // Syndicate relations
+  ledSyndicates             Syndicate[]           @relation("SyndicateLead")
+  syndicateInvestments      SyndicateInvestment[]
+  syndicateMessages         SyndicateMessage[]    @relation("SyndicateMessageSender")
+  syndicateDocuments        SyndicateDocument[]   @relation("SyndicateDocumentUploader")
+  // Secondary marketplace relations
+  originalShareCertificates ShareCertificate[]    @relation("OriginalShareholder")
+  currentShareCertificates  ShareCertificate[]    @relation("CurrentShareholder")
+  orders                    Order[]
+  trades                    Trade[]
+  // Compliance relations
+  complianceProfile         ComplianceProfile?
+  // Auth relations
+  accounts                  Account[]
+
+  // Indexes
+  @@index([email])
+  @@index([role])
+  @@index([createdAt])
+  @@index([isVerified])
+  @@index([emailVerified])
+  @@map("users")
+}
+
+model UserProfile {
+  id                  String              @id @default(cuid())
+  userId              String              @unique
+  bio                 String?
+  location            String?
+  linkedinUrl         String?
+  twitterUrl          String?
+  websiteUrl          String?
+  investmentRangeMin  Decimal?            @db.Decimal(15, 2)
+  investmentRangeMax  Decimal?            @db.Decimal(15, 2)
+  preferredIndustries Json?
+  previousExits       Json?
+  accreditationStatus AccreditationStatus @default(PENDING)
+  kycStatus           KycStatus           @default(PENDING)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([accreditationStatus])
+  @@index([kycStatus])
+  @@map("user_profiles")
+}
+
+// ============================================================================
+// STARTUP MANAGEMENT
+// ============================================================================
+
+model Startup {
+  id                   String       @id @default(cuid())
+  name                 String
+  slug                 String       @unique
+  description          String?
+  industry             String?
+  stage                StartupStage
+  fundingGoal          Decimal      @db.Decimal(15, 2)
+  currentFunding       Decimal      @default(0) @db.Decimal(15, 2)
+  founderId            String
+  websiteUrl           String?
+  logoUrl              String?
+  teamSize             Int?
+  foundedDate          DateTime?
+  businessModel        String?
+  targetMarket         String?
+  competitiveAdvantage String?
+  financialData        Json?
+  isVerified           Boolean      @default(false)
+  isActive             Boolean      @default(true)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  founder   User       @relation("StartupFounder", fields: [founderId], references: [id])
+  pitches   Pitch[]
+  documents Document[]
+
+  // Indexes
+  @@index([founderId])
+  @@index([industry])
+  @@index([stage])
+  @@index([slug])
+  @@index([isVerified])
+  @@index([isActive])
+  @@index([createdAt])
+  @@map("startups")
+}
+
+// ============================================================================
+// PITCH MANAGEMENT
+// ============================================================================
+
+model Pitch {
+  id                   String      @id @default(cuid())
+  startupId            String
+  title                String
+  slug                 String      @unique
+  summary              String?
+  problemStatement     String?
+  solution             String?
+  marketOpportunity    String?
+  competitiveAnalysis  String?
+  financialProjections Json?
+  fundingAmount        Decimal     @db.Decimal(15, 2)
+  equityOffered        Decimal?    @db.Decimal(5, 2)
+  minimumInvestment    Decimal     @db.Decimal(15, 2)
+  status               PitchStatus @default(DRAFT)
+  pitchDeckUrl         String?
+  videoUrl             String?
+  tags                 Json?
+  viewCount            Int         @default(0)
+  isFeatured           Boolean     @default(false)
+  expiresAt            DateTime?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  startup     Startup      @relation(fields: [startupId], references: [id], onDelete: Cascade)
+  investments Investment[]
+  messages    Message[]
+  comments    Comment[]
+  documents   Document[]
+
+  // Indexes
+  @@index([startupId])
+  @@index([status])
+  @@index([isFeatured])
+  @@index([expiresAt])
+  @@index([createdAt])
+  @@index([viewCount])
+  @@index([status, isFeatured])
+  @@index([status, createdAt])
+  @@map("pitches")
+}
+
+// ============================================================================
+// INVESTMENT MANAGEMENT
+// ============================================================================
+
+model Investment {
+  id               String           @id @default(cuid())
+  investorId       String
+  pitchId          String
+  amount           Decimal          @db.Decimal(15, 2)
+  currency         String           @default("USD")
+  equityPercentage Decimal?         @db.Decimal(5, 2)
+  sharePrice       Decimal?         @db.Decimal(15, 2)
+  status           InvestmentStatus @default(PENDING)
+  investmentType   InvestmentType   @default(DIRECT)
+  syndicateLeadId  String?
+  terms            Json?
+  legalDocuments   Json?
+  escrowReference  String?
+  escrowInfo       Json?
+  paymentMethod    String?
+  paymentReference String?
+  investmentDate   DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  investor          User               @relation(fields: [investorId], references: [id])
+  pitch             Pitch              @relation(fields: [pitchId], references: [id], onDelete: Cascade)
+  syndicateLead     User?              @relation("SyndicateLead", fields: [syndicateLeadId], references: [id])
+  transactions      Transaction[]
+  messages          Message[]
+  // New relations for SPV and Share Certificates
+  spvInvestments    SPVInvestment[]
+  shareCertificates ShareCertificate[]
+  // Compliance relations
+  secRegulationD    SECRegulationD?
+
+  // Indexes
+  @@index([investorId])
+  @@index([pitchId])
+  @@index([status])
+  @@index([investmentType])
+  @@index([investmentDate])
+  @@index([completedAt])
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([investorId, status])
+  @@map("investments")
+}
+
+// ============================================================================
+// PORTFOLIO MANAGEMENT
+// ============================================================================
+
+model Portfolio {
+  id              String   @id @default(cuid())
+  investorId      String
+  name            String
+  description     String?
+  isPublic        Boolean  @default(false)
+  totalInvested   Decimal  @default(0) @db.Decimal(15, 2)
+  totalValue      Decimal  @default(0) @db.Decimal(15, 2)
+  totalExits      Decimal  @default(0) @db.Decimal(15, 2)
+  investmentCount Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  investor User @relation(fields: [investorId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([investorId])
+  @@index([isPublic])
+  @@index([createdAt])
+  @@map("portfolios")
+}
+
+// ============================================================================
+// FINANCIAL MANAGEMENT
+// ============================================================================
+
+model Transaction {
+  id                    String            @id @default(cuid())
+  investmentId          String?
+  userId                String
+  type                  TransactionType
+  amount                Decimal           @db.Decimal(15, 2)
+  currency              String            @default("USD")
+  status                TransactionStatus @default(PENDING)
+  paymentMethod         String?
+  paymentProvider       String?
+  paymentReference      String?
+  externalTransactionId String?
+  feeAmount             Decimal           @default(0) @db.Decimal(15, 2)
+  netAmount             Decimal           @db.Decimal(15, 2)
+  description           String?
+  metadata              Json?
+  processedAt           DateTime?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  investment Investment? @relation(fields: [investmentId], references: [id])
+  user       User        @relation(fields: [userId], references: [id])
+  trades     Trade[]
+
+  // Indexes
+  @@index([userId])
+  @@index([investmentId])
+  @@index([type])
+  @@index([status])
+  @@index([externalTransactionId])
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([type, status])
+  @@map("transactions")
+}
+
+// ============================================================================
+// COMMUNICATION SYSTEM
+// ============================================================================
+
+model Message {
+  id           String      @id @default(cuid())
+  senderId     String
+  receiverId   String
+  pitchId      String?
+  investmentId String?
+  subject      String?
+  content      String
+  messageType  MessageType @default(GENERAL)
+  isRead       Boolean     @default(false)
+  readAt       DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  sender     User        @relation("MessageSender", fields: [senderId], references: [id])
+  receiver   User        @relation("MessageReceiver", fields: [receiverId], references: [id])
+  pitch      Pitch?      @relation(fields: [pitchId], references: [id], onDelete: Cascade)
+  investment Investment? @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([pitchId])
+  @@index([investmentId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@index([senderId, receiverId])
+  @@index([isRead, createdAt])
+  @@map("messages")
+}
+
+model Comment {
+  id              String   @id @default(cuid())
+  pitchId         String
+  userId          String
+  parentCommentId String?
+  content         String
+  isApproved      Boolean  @default(true)
+  likesCount      Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  pitch         Pitch     @relation(fields: [pitchId], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [userId], references: [id])
+  parentComment Comment?  @relation("CommentReplies", fields: [parentCommentId], references: [id])
+  replies       Comment[] @relation("CommentReplies")
+
+  // Indexes
+  @@index([pitchId])
+  @@index([userId])
+  @@index([parentCommentId])
+  @@index([isApproved])
+  @@index([createdAt])
+  @@index([pitchId, createdAt])
+  @@map("comments")
+}
+
+// ============================================================================
+// DOCUMENT MANAGEMENT
+// ============================================================================
+
+model Document {
+  id                String       @id @default(cuid())
+  startupId         String
+  pitchId           String?
+  name              String
+  fileName          String
+  filePath          String
+  fileUrl           String
+  fileType          DocumentType
+  documentType      String
+  fileSize          Int
+  mimeType          String?
+  isPublic          Boolean      @default(false)
+  visibility        String       @default("PRIVATE")
+  description       String?
+  tags              Json?
+  requiresSignature Boolean      @default(false)
+  expiryDate        DateTime?
+  downloadCount     Int          @default(0)
+  version           Int          @default(1)
+  relatedEntity     Json?
+  uploadedBy        String
+  uploadedAt        DateTime     @default(now())
+  signatures        Json?
+  createdBy         String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  startup  Startup @relation(fields: [startupId], references: [id], onDelete: Cascade)
+  pitch    Pitch?  @relation(fields: [pitchId], references: [id], onDelete: Cascade)
+  uploader User    @relation("DocumentUploader", fields: [uploadedBy], references: [id])
+
+  // Indexes
+  @@index([startupId])
+  @@index([pitchId])
+  @@index([fileType])
+  @@index([documentType])
+  @@index([isPublic])
+  @@index([visibility])
+  @@index([uploadedBy])
+  @@index([expiryDate])
+  @@index([createdAt])
+  @@map("documents")
+}
+
+// ============================================================================
+// NOTIFICATION SYSTEM
+// ============================================================================
+
+model Notification {
+  id        String               @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  content   String
+  data      Json?
+  isRead    Boolean              @default(false)
+  readAt    DateTime?
+  actionUrl String?
+  priority  NotificationPriority @default(MEDIUM)
+  expiresAt DateTime?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([userId])
+  @@index([isRead])
+  @@index([type])
+  @@index([priority])
+  @@index([createdAt])
+  @@index([expiresAt])
+  @@index([isRead, createdAt])
+  @@index([type, createdAt])
+  @@map("notifications")
+}
+
+// ============================================================================
+// AUDIT LOG SYSTEM
+// ============================================================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String
+  oldValues  Json?
+  newValues  Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  // Indexes
+  @@index([userId])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@index([createdAt, action])
+  @@map("audit_logs")
+}
+
+// ============================================================================
+// SYNDICATE MANAGEMENT
+// ============================================================================
+
+model Syndicate {
+  id                String          @id @default(cuid())
+  name              String
+  slug              String          @unique
+  description       String?
+  leadInvestorId    String
+  targetAmount      Decimal         @db.Decimal(15, 2)
+  minimumInvestment Decimal         @db.Decimal(15, 2)
+  maxInvestors      Int?
+  currentAmount     Decimal         @default(0) @db.Decimal(15, 2)
+  investorCount     Int             @default(0)
+  status            SyndicateStatus @default(FORMING)
+  investmentTerms   Json?
+  legalStructure    String?
+  formationDate     DateTime?
+  closingDate       DateTime?
+  isActive          Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  leadInvestor User                  @relation("SyndicateLead", fields: [leadInvestorId], references: [id])
+  investments  SyndicateInvestment[]
+  spvs         SPV[]
+  messages     SyndicateMessage[]
+  documents    SyndicateDocument[]
+
+  // Indexes
+  @@index([leadInvestorId])
+  @@index([status])
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([closingDate])
+  @@index([status, isActive])
+  @@map("syndicates")
+}
+
+model SyndicateInvestment {
+  id             String                    @id @default(cuid())
+  syndicateId    String
+  investorId     String
+  amount         Decimal                   @db.Decimal(15, 2)
+  commitmentDate DateTime                  @default(now())
+  status         SyndicateInvestmentStatus @default(COMMITTED)
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+
+  syndicate Syndicate @relation(fields: [syndicateId], references: [id], onDelete: Cascade)
+  investor  User      @relation(fields: [investorId], references: [id])
+
+  // Indexes
+  @@index([syndicateId])
+  @@index([investorId])
+  @@index([status])
+  @@index([commitmentDate])
+  @@map("syndicate_investments")
+}
+
+// ============================================================================
+// SPV MANAGEMENT
+// ============================================================================
+
+model SPV {
+  id                 String    @id @default(cuid())
+  name               String
+  legalName          String
+  syndicateId        String
+  jurisdiction       String
+  formationDate      DateTime?
+  registrationNumber String?
+  taxId              String?
+  bankAccount        Json?
+  status             SPVStatus @default(FORMING)
+  totalCapital       Decimal   @default(0) @db.Decimal(15, 2)
+  managementFee      Decimal?  @db.Decimal(5, 2)
+  carriedInterest    Decimal?  @db.Decimal(5, 2)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  syndicate         Syndicate          @relation(fields: [syndicateId], references: [id], onDelete: Cascade)
+  investments       SPVInvestment[]
+  shareCertificates ShareCertificate[]
+
+  // Indexes
+  @@index([syndicateId])
+  @@index([status])
+  @@index([formationDate])
+  @@index([registrationNumber])
+  @@map("spvs")
+}
+
+model SPVInvestment {
+  id                  String              @id @default(cuid())
+  spvId               String
+  investmentId        String              @unique
+  ownershipPercentage Decimal             @db.Decimal(5, 2)
+  capitalCommitment   Decimal             @db.Decimal(15, 2)
+  status              SPVInvestmentStatus @default(ACTIVE)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  spv        SPV        @relation(fields: [spvId], references: [id], onDelete: Cascade)
+  investment Investment @relation(fields: [investmentId], references: [id])
+
+  // Indexes
+  @@index([spvId])
+  @@index([investmentId])
+  @@index([status])
+  @@map("spv_investments")
+}
+
+// ============================================================================
+// SECONDARY MARKETPLACE
+// ============================================================================
+
+model Order {
+  id                 String      @id @default(cuid())
+  shareCertificateId String
+  sellerId           String
+  orderType          OrderType
+  quantity           Int
+  pricePerShare      Decimal     @db.Decimal(15, 2)
+  totalAmount        Decimal     @db.Decimal(15, 2)
+  status             OrderStatus @default(ACTIVE)
+  expiresAt          DateTime?
+  conditions         Json?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  shareCertificate ShareCertificate @relation(fields: [shareCertificateId], references: [id])
+  seller           User             @relation(fields: [sellerId], references: [id])
+  trades           Trade[]
+
+  // Indexes
+  @@index([shareCertificateId])
+  @@index([sellerId])
+  @@index([orderType])
+  @@index([status])
+  @@index([expiresAt])
+  @@index([createdAt])
+  @@index([status, orderType])
+  @@index([status, createdAt])
+  @@map("orders")
+}
+
+model Trade {
+  id                String      @id @default(cuid())
+  orderId           String
+  buyerId           String
+  quantity          Int
+  pricePerShare     Decimal     @db.Decimal(15, 2)
+  totalAmount       Decimal     @db.Decimal(15, 2)
+  fees              Decimal     @default(0) @db.Decimal(15, 2)
+  status            TradeStatus @default(PENDING)
+  executedAt        DateTime?
+  settlementDate    DateTime?
+  transferDocuments Json?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  order        Order         @relation(fields: [orderId], references: [id])
+  buyer        User          @relation(fields: [buyerId], references: [id])
+  transactions Transaction[]
+
+  // Indexes
+  @@index([orderId])
+  @@index([buyerId])
+  @@index([status])
+  @@index([executedAt])
+  @@index([settlementDate])
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@map("trades")
+}
+
+model ShareCertificate {
+  id                 String   @id @default(cuid())
+  spvId              String
+  originalInvestorId String
+  currentOwnerId     String
+  investmentId       String   @unique
+  certificateNumber  String   @unique
+  totalShares        Int
+  sharePrice         Decimal  @db.Decimal(15, 2)
+  totalValue         Decimal  @db.Decimal(15, 2)
+  issuedDate         DateTime
+  transferHistory    Json?
+  isTransferable     Boolean  @default(true)
+  restrictions       Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  spv              SPV        @relation(fields: [spvId], references: [id])
+  originalInvestor User       @relation("OriginalShareholder", fields: [originalInvestorId], references: [id])
+  currentOwner     User       @relation("CurrentShareholder", fields: [currentOwnerId], references: [id])
+  investment       Investment @relation(fields: [investmentId], references: [id])
+  orders           Order[]
+
+  // Indexes
+  @@index([spvId])
+  @@index([originalInvestorId])
+  @@index([currentOwnerId])
+  @@index([investmentId])
+  @@index([certificateNumber])
+  @@index([isTransferable])
+  @@index([issuedDate])
+  @@map("share_certificates")
+}
+
+model SyndicateMessage {
+  id          String               @id @default(cuid())
+  syndicateId String
+  senderId    String
+  subject     String?
+  content     String
+  messageType SyndicateMessageType @default(GENERAL)
+  isRead      Boolean              @default(false)
+  readAt      DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  syndicate Syndicate @relation(fields: [syndicateId], references: [id], onDelete: Cascade)
+  sender    User      @relation("SyndicateMessageSender", fields: [senderId], references: [id])
+
+  // Indexes
+  @@index([syndicateId])
+  @@index([senderId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@index([syndicateId, createdAt])
+  @@map("syndicate_messages")
+}
+
+model SyndicateDocument {
+  id            String                @id @default(cuid())
+  syndicateId   String
+  name          String
+  filePath      String
+  fileUrl       String
+  fileType      SyndicateDocumentType
+  fileSize      Int
+  mimeType      String?
+  isPublic      Boolean               @default(false)
+  downloadCount Int                   @default(0)
+  uploadedBy    String
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  syndicate Syndicate @relation(fields: [syndicateId], references: [id], onDelete: Cascade)
+  uploader  User      @relation("SyndicateDocumentUploader", fields: [uploadedBy], references: [id])
+
+  // Indexes
+  @@index([syndicateId])
+  @@index([fileType])
+  @@index([isPublic])
+  @@index([uploadedBy])
+  @@index([createdAt])
+  @@map("syndicate_documents")
+}
+
+enum SyndicateMessageType {
+  GENERAL
+  INVESTMENT_UPDATE
+  LEGAL_UPDATE
+  DISTRIBUTION
+  MEETING
+}
+
+enum SyndicateDocumentType {
+  SYNDICATE_AGREEMENT
+  INVESTMENT_MEMORANDUM
+  LEGAL_DOCUMENT
+  FINANCIAL_STATEMENT
+  MEETING_MINUTES
+  OTHER
+}
+
+// ============================================================================
+// COMPLIANCE MANAGEMENT
+// ============================================================================
+
+model ComplianceProfile {
+  id                           String               @id @default(cuid())
+  userId                       String               @unique
+  // SEC Regulation D Compliance
+  accreditedInvestorStatus     AccreditationStatus  @default(PENDING)
+  accreditedInvestorVerifiedAt DateTime?
+  accreditationDocuments       Json?
+  netWorth                     Decimal?             @db.Decimal(15, 2)
+  annualIncome                 Decimal?             @db.Decimal(15, 2)
+  accreditationMethod          AccreditationMethod?
+  accreditationExpiry          DateTime?
+  // Enhanced KYC/AML
+  kycStatus                    KycStatus            @default(PENDING)
+  kycVerifiedAt                DateTime?
+  kycDocuments                 Json?
+  amlStatus                    AmlStatus            @default(PENDING)
+  amlVerifiedAt                DateTime?
+  riskScore                    Int                  @default(0)
+  pepStatus                    PepStatus            @default(NOT_PEP)
+  sanctionStatus               SanctionStatus       @default(CLEAR)
+  // GDPR Compliance
+  gdprConsent                  Boolean              @default(false)
+  gdprConsentDate              DateTime?
+  gdprConsentVersion           String?
+  dataProcessingConsent        Boolean              @default(false)
+  marketingConsent             Boolean              @default(false)
+  dataRetentionExpiry          DateTime?
+  // Additional Compliance
+  complianceNotes              String?
+  lastComplianceReview         DateTime?
+  nextComplianceReview         DateTime?
+  createdAt                    DateTime             @default(now())
+  updatedAt                    DateTime             @updatedAt
+
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  complianceLogs      ComplianceLog[]
+  complianceDocuments ComplianceDocument[]
+
+  // Indexes
+  @@index([accreditedInvestorStatus])
+  @@index([kycStatus])
+  @@index([amlStatus])
+  @@index([pepStatus])
+  @@index([sanctionStatus])
+  @@index([accreditationExpiry])
+  @@index([dataRetentionExpiry])
+  @@map("compliance_profiles")
+}
+
+model ComplianceLog {
+  id                  String              @id @default(cuid())
+  complianceProfileId String
+  action              String
+  details             Json?
+  status              ComplianceLogStatus @default(PENDING)
+  performedBy         String?
+  ipAddress           String?
+  userAgent           String?
+  createdAt           DateTime            @default(now())
+
+  complianceProfile ComplianceProfile @relation(fields: [complianceProfileId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([complianceProfileId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([action])
+  @@map("compliance_logs")
+}
+
+model ComplianceDocument {
+  id                  String                 @id @default(cuid())
+  complianceProfileId String
+  documentType        ComplianceDocumentType
+  fileName            String
+  filePath            String
+  fileUrl             String
+  fileSize            Int
+  mimeType            String?
+  documentStatus      DocumentStatus         @default(PENDING)
+  verifiedAt          DateTime?
+  verifiedBy          String?
+  expiryDate          DateTime?
+  notes               String?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  complianceProfile ComplianceProfile @relation(fields: [complianceProfileId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([complianceProfileId])
+  @@index([documentType])
+  @@index([documentStatus])
+  @@index([expiryDate])
+  @@index([createdAt])
+  @@map("compliance_documents")
+}
+
+model SECRegulationD {
+  id                            String             @id @default(cuid())
+  investmentId                  String             @unique
+  // Regulation D Rule 506(c) requirements
+  isAccreditedInvestor          Boolean
+  verificationMethod            VerificationMethod
+  issuerVerification            Boolean            @default(false)
+  investorAttestation           Boolean            @default(false)
+  // Investment limits and calculations
+  investmentAmount              Decimal            @db.Decimal(15, 2)
+  netWorth                      Decimal?           @db.Decimal(15, 2)
+  annualIncome                  Decimal?           @db.Decimal(15, 2)
+  investmentPercentage          Decimal?           @db.Decimal(5, 2)
+  // Documentation and compliance
+  disclosureDocument            String?
+  subscriptionAgreement         String?
+  accreditedInvestorCertificate String?
+  complianceNotes               String?
+  filedWithSEC                  Boolean            @default(false)
+  filingDate                    DateTime?
+  createdAt                     DateTime           @default(now())
+  updatedAt                     DateTime           @updatedAt
+
+  investment Investment @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([isAccreditedInvestor])
+  @@index([verificationMethod])
+  @@index([filedWithSEC])
+  @@index([filingDate])
+  @@index([createdAt])
+  @@map("sec_regulation_d")
+}
+
+// ============================================================================
+// PERFORMANCE TRACKING AND ANALYTICS
+// ============================================================================
+
+model PerformanceMetric {
+  id          String                @id @default(cuid())
+  entityType  String // 'user', 'startup', 'investment', 'syndicate', 'spv'
+  entityId    String
+  metricType  PerformanceMetricType
+  metricName  String
+  metricValue Decimal               @db.Decimal(15, 2)
+  metricUnit  String?
+  period      String // 'daily', 'weekly', 'monthly', 'quarterly', 'yearly'
+  periodStart DateTime
+  periodEnd   DateTime
+  metadata    Json?
+  createdAt   DateTime              @default(now())
+
+  // Indexes
+  @@index([entityType])
+  @@index([entityId])
+  @@index([metricType])
+  @@index([period])
+  @@index([periodStart])
+  @@index([periodEnd])
+  @@index([createdAt])
+  @@index([entityType, entityId, metricType])
+  @@index([period, periodStart])
+  @@map("performance_metrics")
+}
+
+model AnalyticsSnapshot {
+  id           String                @id @default(cuid())
+  snapshotType AnalyticsSnapshotType
+  entityType   String?
+  entityId     String?
+  data         Json
+  snapshotDate DateTime
+  createdAt    DateTime              @default(now())
+
+  // Indexes
+  @@index([snapshotType])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([snapshotDate])
+  @@index([createdAt])
+  @@index([snapshotType, snapshotDate])
+  @@map("analytics_snapshots")
+}
+
+// ============================================================================
+// SESSION MANAGEMENT (for authentication)
+// ============================================================================
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([userId])
+  @@index([expires])
+  @@index([sessionToken])
+  @@map("sessions")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  createdAt  DateTime @default(now())
+
+  @@unique([identifier, token])
+  @@index([token])
+  @@index([expires])
+  @@map("verifications")
+}
+
+// ============================================================================
+// MONITORING AND ALERTING
+// ============================================================================
+
+model QueueMetrics {
+  id                    String   @id @default(cuid())
+  queueName             String
+  waiting               Int
+  active                Int
+  completed             Int
+  failed                Int
+  delayed               Int
+  paused                Int
+  averageProcessingTime Float
+  throughputPerSecond   Float
+  errorRate             Float
+  successRate           Float
+  recordedAt            DateTime @default(now())
+  createdAt             DateTime @default(now())
+
+  // Indexes
+  @@index([queueName])
+  @@index([recordedAt])
+  @@index([queueName, recordedAt])
+  @@map("queue_metrics")
+}
+
+model SystemMetrics {
+  id                 String   @id @default(cuid())
+  timestamp          DateTime
+  uptime             Float
+  memoryUsed         Float
+  memoryTotal        Float
+  memoryPercentage   Float
+  cpuUsage           Float
+  activeQueues       Int
+  totalQueues        Int
+  activeWorkers      Int
+  totalWorkers       Int
+  dbConnections      Int
+  dbQueriesPerSecond Float
+  wsConnections      Int
+  wsRooms            Int
+  metadata           Json?
+  createdAt          DateTime @default(now())
+
+  // Indexes
+  @@index([timestamp])
+  @@index([createdAt])
+  @@map("system_metrics")
+}
+
+model Alert {
+  id          String    @id @default(cuid())
+  type        String
+  severity    String
+  message     String
+  details     Json?
+  isResolved  Boolean   @default(false)
+  resolvedAt  DateTime?
+  triggeredAt DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Indexes
+  @@index([type])
+  @@index([severity])
+  @@index([isResolved])
+  @@index([triggeredAt])
+  @@index([type, severity])
+  @@index([isResolved, triggeredAt])
+  @@map("alerts")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum UserRole {
+  FOUNDER
+  INVESTOR
+  SYNDICATE_LEAD
+  ADMIN
+}
+
+enum AccreditationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum KycStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum StartupStage {
+  IDEA
+  PROTOTYPE
+  MVP
+  GROWTH
+  SCALE
+}
+
+enum PitchStatus {
+  DRAFT
+  UNDER_REVIEW
+  ACTIVE
+  FUNDED
+  CLOSED
+  WITHDRAWN
+}
+
+enum InvestmentStatus {
+  PENDING
+  ESCROW
+  DUE_DILIGENCE
+  LEGAL_REVIEW
+  COMPLETED
+  CANCELLED
+}
+
+enum InvestmentType {
+  DIRECT
+  SYNDICATE
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  FEE
+  INVESTMENT
+  REFUND
+}
+
+enum TransactionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum MessageType {
+  GENERAL
+  PITCH_INQUIRY
+  INVESTMENT_DISCUSSION
+  SUPPORT
+}
+
+enum DocumentType {
+  PITCH_DECK
+  BUSINESS_PLAN
+  FINANCIAL_STATEMENT
+  LEGAL_DOCUMENT
+  OTHER
+}
+
+enum NotificationType {
+  INVESTMENT_UPDATE
+  MESSAGE
+  PITCH_UPDATE
+  SYSTEM
+  PAYMENT
+}
+
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+// ============================================================================
+// SYNDICATE ENUMS
+// ============================================================================
+
+enum SyndicateStatus {
+  FORMING
+  ACTIVE
+  FULLY_FUNDED
+  CLOSING
+  CLOSED
+  CANCELLED
+}
+
+enum SyndicateInvestmentStatus {
+  COMMITTED
+  FUNDED
+  DISTRIBUTED
+  EXITED
+  CANCELLED
+}
+
+enum SPVStatus {
+  FORMING
+  ACTIVE
+  DISSOLVING
+  DISSOLVED
+}
+
+enum SPVInvestmentStatus {
+  ACTIVE
+  TRANSFERRED
+  EXITED
+  CANCELLED
+}
+
+// ============================================================================
+// SECONDARY MARKETPLACE ENUMS
+// ============================================================================
+
+enum OrderType {
+  BUY
+  SELL
+}
+
+enum OrderStatus {
+  ACTIVE
+  PARTIALLY_FILLED
+  FILLED
+  CANCELLED
+  EXPIRED
+}
+
+enum TradeStatus {
+  PENDING
+  EXECUTED
+  SETTLED
+  FAILED
+  CANCELLED
+}
+
+// ============================================================================
+// COMPLIANCE ENUMS
+// ============================================================================
+
+enum AccreditationMethod {
+  NET_WORTH
+  INCOME
+  PROFESSIONAL
+  EXISTING_RELATIONSHIP
+  THIRD_PARTY_VERIFICATION
+}
+
+enum AmlStatus {
+  PENDING
+  PASSED
+  FAILED
+  REQUIRES_REVIEW
+  EXEMPT
+}
+
+enum PepStatus {
+  NOT_PEP
+  PEP
+  FAMILY_MEMBER
+  CLOSE_ASSOCIATE
+}
+
+enum SanctionStatus {
+  CLEAR
+  PARTIAL_MATCH
+  FULL_MATCH
+  UNDER_REVIEW
+}
+
+enum ComplianceLogStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REQUIRES_REVIEW
+}
+
+enum ComplianceDocumentType {
+  PASSPORT
+  DRIVERS_LICENSE
+  PROOF_OF_ADDRESS
+  BANK_STATEMENT
+  TAX_RETURN
+  ACCREDITATION_CERTIFICATE
+  SOURCE_OF_FUNDS
+  OTHER
+}
+
+enum DocumentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+enum VerificationMethod {
+  SELF_ATTESTATION
+  THIRD_PARTY_VERIFICATION
+  DOCUMENTARY_EVIDENCE
+  EXISTING_RELATIONSHIP
+}
+
+// ============================================================================
+// PERFORMANCE AND ANALYTICS ENUMS
+// ============================================================================
+
+enum PerformanceMetricType {
+  INVESTMENT_RETURN
+  PORTFOLIO_VALUE
+  USER_ACTIVITY
+  PLATFORM_METRIC
+  STARTUP_METRIC
+  SYNDICATE_METRIC
+  SPV_METRIC
+  COMPLIANCE_METRIC
+}
+
+enum AnalyticsSnapshotType {
+  DAILY_SUMMARY
+  WEEKLY_SUMMARY
+  MONTHLY_SUMMARY
+  USER_ANALYTICS
+  STARTUP_ANALYTICS
+  INVESTMENT_ANALYTICS
+  SYNDICATE_ANALYTICS
+  SPV_ANALYTICS
+  COMPLIANCE_ANALYTICS
+  PLATFORM_OVERVIEW
+}
+
+// ============================================================================
+// INDEXES AND PERFORMANCE OPTIMIZATIONS
+// ============================================================================
+
+// ============================================================================
+// INDEXES AND PERFORMANCE OPTIMIZATIONS
+// ============================================================================
+
+// Note: Indexes are defined within each model above for better organization
+// and to ensure they reference the correct fields within their respective models

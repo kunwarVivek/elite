@@ -1,0 +1,261 @@
+# Default values for angel-investing-marketplace.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Global configuration
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: "fast-ssd"
+
+# Application configuration
+app:
+  name: "angel-investing-marketplace"
+  version: "1.0.0"
+
+# Backend configuration
+backend:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: angel-investing/backend
+    tag: "latest"
+    pullPolicy: Always
+
+  replicaCount: 2
+
+  port: 3001
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    fsGroup: 1001
+
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 1001
+    capabilities:
+      drop:
+      - ALL
+
+  service:
+    type: ClusterIP
+    port: 3001
+    annotations: {}
+
+  ingress:
+    enabled: false
+
+# Frontend configuration
+frontend:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: angel-investing/frontend
+    tag: "latest"
+    pullPolicy: Always
+
+  replicaCount: 2
+
+  port: 80
+
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    fsGroup: 1001
+
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 1001
+    capabilities:
+      drop:
+      - ALL
+
+  service:
+    type: ClusterIP
+    port: 80
+    annotations: {}
+
+# Database configuration
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "CHANGE_THIS_PASSWORD"
+    password: "CHANGE_THIS_PASSWORD"
+
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: "fast-ssd"
+
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+
+    configuration: |
+      max_connections = 200
+      shared_buffers = 128MB
+      effective_cache_size = 256MB
+      maintenance_work_mem = 64MB
+      checkpoint_completion_target = 0.9
+      wal_buffers = 16MB
+      default_statistics_target = 100
+      random_page_cost = 1.5
+      effective_io_concurrency = 200
+
+# Redis configuration
+redis:
+  enabled: true
+  auth:
+    password: "CHANGE_THIS_PASSWORD"
+
+  master:
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClass: "fast-ssd"
+
+    resources:
+      limits:
+        cpu: 250m
+        memory: 256Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+
+    configmap: |
+      maxmemory 256mb
+      maxmemory-policy allkeys-lru
+      appendonly yes
+      appendfsync everysec
+
+# Nginx Ingress configuration
+nginx:
+  enabled: true
+  replicaCount: 2
+
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  service:
+    type: LoadBalancer
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+      service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+
+# Monitoring configuration
+prometheus:
+  enabled: true
+  server:
+    persistentVolume:
+      enabled: true
+      size: 50Gi
+      storageClass: "fast-ssd"
+
+grafana:
+  enabled: true
+  adminPassword: "CHANGE_THIS_PASSWORD"
+
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: "fast-ssd"
+
+# Certificate manager
+cert-manager:
+  enabled: true
+  installCRDs: true
+
+# External secrets (for production)
+external-secrets:
+  enabled: false  # Enable in production with proper configuration
+
+# Network policies
+networkPolicies:
+  enabled: true
+
+# Pod disruption budgets
+podDisruptionBudgets:
+  enabled: true
+  backend:
+    minAvailable: 1
+  frontend:
+    minAvailable: 1
+  postgres:
+    minAvailable: 1
+  redis:
+    minAvailable: 1
+
+# Service mesh (Istio) - optional
+istio:
+  enabled: false
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: true
+
+# Secrets management
+secrets:
+  # Use external secret management in production
+  useExternalSecrets: false
+
+  # Default secrets (change in production)
+  jwtSecret: "CHANGE_THIS_JWT_SECRET_MIN_64_CHARS"
+  encryptionKey: "CHANGE_THIS_ENCRYPTION_KEY_32_BYTES"
+  stripeSecretKey: "sk_test_CHANGE_THIS_STRIPE_KEY"
+  cloudflareR2SecretKey: "CHANGE_THIS_R2_SECRET_KEY"
+  emailServiceApiKey: "CHANGE_THIS_EMAIL_API_KEY"

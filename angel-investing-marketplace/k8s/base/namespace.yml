@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: angel-investing-marketplace
+  labels:
+    name: angel-investing-marketplace
+    app: angel-investing-marketplace

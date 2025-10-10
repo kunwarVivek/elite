@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # Test PostgreSQL Database
+  test-postgres:
+    image: postgres:15-alpine
+    container_name: angel_investing_test_db
+    environment:
+      POSTGRES_DB: angel_investing_test
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5433:5432"  # Use different port to avoid conflicts
+    volumes:
+      - test_postgres_data:/var/lib/postgresql/data
+      - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d angel_investing_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test-network
+
+  # Test Redis
+  test-redis:
+    image: redis:7-alpine
+    container_name: angel_investing_test_redis
+    ports:
+      - "6380:6379"  # Use different port to avoid conflicts
+    command: redis-server --appendonly yes
+    volumes:
+      - test_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test-network
+
+  # Test MinIO (for file storage testing)
+  test-minio:
+    image: minio/minio:latest
+    container_name: angel_investing_test_minio
+    environment:
+      MINIO_ROOT_USER: test
+      MINIO_ROOT_PASSWORD: testpassword
+    ports:
+      - "9001:9000"
+      - "9002:9001"
+    command: server /data --console-address ":9001"
+    volumes:
+      - test_minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - test-network
+
+  # Test MailHog (for email testing)
+  test-mailhog:
+    image: mailhog/mailhog:latest
+    container_name: angel_investing_test_mailhog
+    ports:
+      - "1026:1025"  # SMTP
+      - "8026:8025"  # Web interface
+    networks:
+      - test-network
+
+networks:
+  test-network:
+    driver: bridge
+
+volumes:
+  test_postgres_data:
+    driver: local
+  test_redis_data:
+    driver: local
+  test_minio_data:
+    driver: local

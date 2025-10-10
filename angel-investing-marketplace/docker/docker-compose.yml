@@ -1,0 +1,168 @@
+# Docker Compose v3.8 - requires Docker Engine 19.03.0+
+#
+# Development Workflow:
+# - For backend hot reload: mount source volumes (see backend service comments)
+# - For frontend development: use `npm run dev` outside Docker for HMR
+# - Debug port 9229 available for Node.js inspector (commented by default)
+# - Generate secrets: docker/scripts/generate-dev-secrets.sh
+#
+# Service Startup Order:
+# postgres (healthy) ──┐
+#                      ├──→ backend (healthy) ──→ frontend
+# redis (healthy) ─────┘
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: angel-investing-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: angel_investing_marketplace
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    # Database ports not exposed for security - internal network only
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # Redis for caching and sessions
+  redis:
+    image: redis:7-alpine
+    container_name: angel-investing-redis
+    restart: unless-stopped
+    # Redis ports not exposed for security - internal network only
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # Backend API
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    container_name: angel-investing-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+      # Uncomment for Node.js debugging:
+      # - "9229:9229"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL_FILE=/run/secrets/database_url
+      - REDIS_URL_FILE=/run/secrets/redis_url
+      - BETTER_AUTH_SECRET_FILE=/run/secrets/better_auth_secret
+      - JWT_SECRET_FILE=/run/secrets/jwt_secret
+      - SMTP_PASS_FILE=/run/secrets/smtp_pass
+      - AWS_SECRET_ACCESS_KEY_FILE=/run/secrets/aws_secret_access_key
+      - STRIPE_SECRET_KEY_FILE=/run/secrets/stripe_secret_key
+      - STRIPE_WEBHOOK_SECRET_FILE=/run/secrets/stripe_webhook_secret
+      - PLAID_SECRET_FILE=/run/secrets/plaid_secret
+      - PORT=3001
+    # Uncomment for hot reload development (NODE_ENV=development):
+    # volumes:
+    #   - ../backend/src:/app/src:ro
+    #   - ../backend/prisma:/app/prisma:ro
+    secrets:
+      - database_url
+      - redis_url
+      - better_auth_secret
+      - jwt_secret
+      - smtp_pass
+      - aws_secret_access_key
+      - stripe_secret_key
+      - stripe_webhook_secret
+      - plaid_secret
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Frontend Application
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+    container_name: angel-investing-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    environment:
+      # Runtime config injection via frontend-entrypoint.sh
+      - VITE_API_URL=http://backend:3001
+      - VITE_WS_URL=ws://backend:3001
+      - VITE_BETTER_AUTH_URL=http://backend:3001/api/auth
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  default:
+    name: angel-investing-network
+
+# Docker Secrets Configuration
+# Generate development secrets using: docker/scripts/generate-dev-secrets.sh
+#
+# Required secrets (backend will fail without these):
+#   - database_url: PostgreSQL connection string
+#   - redis_url: Redis connection string
+#   - better_auth_secret: Authentication encryption key
+#   - jwt_secret: JWT token signing key
+#
+# Optional secrets (backend handles gracefully if missing):
+#   - smtp_pass: Email service password
+#   - aws_secret_access_key: AWS S3 access for file storage
+#   - stripe_secret_key: Stripe payment processing
+#   - stripe_webhook_secret: Stripe webhook verification
+#   - plaid_secret: Plaid financial data integration
+
+secrets:
+  database_url:
+    file: ./secrets/database_url.txt
+  redis_url:
+    file: ./secrets/redis_url.txt
+  better_auth_secret:
+    file: ./secrets/better_auth_secret.txt
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+  smtp_pass:
+    file: ./secrets/smtp_pass.txt
+  aws_secret_access_key:
+    file: ./secrets/aws_secret_access_key.txt
+  stripe_secret_key:
+    file: ./secrets/stripe_secret_key.txt
+  stripe_webhook_secret:
+    file: ./secrets/stripe_webhook_secret.txt
+  plaid_secret:
+    file: ./secrets/plaid_secret.txt

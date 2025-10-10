@@ -1,0 +1,347 @@
+groups:
+  - name: angel_investing_marketplace
+    interval: 30s
+    rules:
+
+    # Infrastructure Alerts - Critical for 99.9% uptime SLA
+    - alert: ServiceDown
+      expr: up{job=~"backend|frontend|postgres|redis|nginx"} == 0
+      for: 30s
+      labels:
+        severity: critical
+        service: "{{ $labels.job }}"
+        category: availability
+      annotations:
+        summary: "Service {{ $labels.job }} is down"
+        description: "Service {{ $labels.job }} has been down for more than 30 seconds. This affects the 99.9% uptime SLA."
+        runbook_url: "https://docs.angelinvesting.market/runbooks/service-down"
+        impact: "Users cannot access {{ $labels.job }} functionality"
+        action: "Check service logs and restart if necessary"
+
+    - alert: HighCPUUsage
+      expr: rate(container_cpu_usage_seconds_total[5m]) * 100 > 80
+      for: 2m
+      labels:
+        severity: warning
+        category: performance
+      annotations:
+        summary: "High CPU usage detected"
+        description: "Container CPU usage is above 80% for more than 2 minutes"
+        action: "Scale up resources or optimize application"
+
+    - alert: HighMemoryUsage
+      expr: container_memory_usage_bytes / container_spec_memory_limit_bytes * 100 > 85
+      for: 2m
+      labels:
+        severity: warning
+        category: performance
+      annotations:
+        summary: "High memory usage detected"
+        description: "Container memory usage is above 85% for more than 2 minutes"
+        action: "Scale up resources or investigate memory leaks"
+
+    # Database Alerts - Critical for data integrity
+    - alert: PostgreSQLDown
+      expr: pg_up == 0
+      for: 30s
+      labels:
+        severity: critical
+        service: postgres
+        category: database
+      annotations:
+        summary: "PostgreSQL database is down"
+        description: "PostgreSQL database has been unreachable for more than 30 seconds"
+        impact: "All database operations are failing"
+        action: "Check database logs and connectivity"
+
+    - alert: PostgreSQLHighConnections
+      expr: pg_stat_activity_count > 80
+      for: 1m
+      labels:
+        severity: warning
+        service: postgres
+        category: database
+      annotations:
+        summary: "High PostgreSQL connection count"
+        description: "PostgreSQL has more than 80 active connections"
+        action: "Check for connection leaks or increase max_connections"
+
+    - alert: PostgreSQLSlowQueries
+      expr: increase(pg_stat_statements_total_time_seconds[5m]) / increase(pg_stat_statements_calls[5m]) > 1
+      for: 5m
+      labels:
+        severity: warning
+        service: postgres
+        category: database
+      annotations:
+        summary: "Slow PostgreSQL queries detected"
+        description: "Average query execution time is above 1 second"
+        action: "Review slow query log and optimize queries"
+
+    - alert: PostgreSQLReplicationLag
+      expr: pg_stat_replication_lag > 60
+      for: 2m
+      labels:
+        severity: critical
+        service: postgres
+        category: database
+      annotations:
+        summary: "PostgreSQL replication lag too high"
+        description: "Replication lag is above 60 seconds"
+        impact: "Data consistency issues may occur"
+        action: "Check replication status and network connectivity"
+
+    # Redis Alerts - Critical for caching and sessions
+    - alert: RedisDown
+      expr: redis_up == 0
+      for: 30s
+      labels:
+        severity: critical
+        service: redis
+        category: cache
+      annotations:
+        summary: "Redis cache is down"
+        description: "Redis has been unreachable for more than 30 seconds"
+        impact: "Session management and caching are affected"
+        action: "Check Redis logs and restart if necessary"
+
+    - alert: RedisMemoryUsage
+      expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 85
+      for: 2m
+      labels:
+        severity: warning
+        service: redis
+        category: cache
+      annotations:
+        summary: "High Redis memory usage"
+        description: "Redis memory usage is above 85%"
+        action: "Increase Redis memory limit or check for memory leaks"
+
+    - alert: RedisRejectedConnections
+      expr: increase(redis_rejected_connections_total[5m]) > 10
+      for: 1m
+      labels:
+        severity: warning
+        service: redis
+        category: cache
+      annotations:
+        summary: "Redis rejecting connections"
+        description: "Redis has rejected more than 10 connections in 5 minutes"
+        action: "Check Redis configuration and increase maxclients"
+
+    # Application Performance Alerts
+    - alert: HighResponseTime
+      expr: http_request_duration_seconds{quantile="0.95"} > 2
+      for: 5m
+      labels:
+        severity: warning
+        category: performance
+      annotations:
+        summary: "High API response time"
+        description: "95th percentile response time is above 2 seconds"
+        action: "Check application performance and database queries"
+
+    - alert: HighErrorRate
+      expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) * 100 > 5
+      for: 2m
+      labels:
+        severity: critical
+        category: errors
+      annotations:
+        summary: "High error rate detected"
+        description: "Error rate is above 5% for more than 2 minutes"
+        impact: "Users are experiencing errors"
+        action: "Check application logs and recent deployments"
+
+    - alert: CircuitBreakerOpen
+      expr: increase(circuit_breaker_state_total{state="open"}[5m]) > 0
+      for: 1m
+      labels:
+        severity: critical
+        category: resilience
+      annotations:
+        summary: "Circuit breaker is open"
+        description: "Circuit breaker has been opened, requests are being rejected"
+        action: "Check downstream service health"
+
+    # Security Alerts - Critical for compliance
+    - alert: HighFailedAuthAttempts
+      expr: rate(authentication_failure_total[5m]) > 10
+      for: 2m
+      labels:
+        severity: critical
+        category: security
+      annotations:
+        summary: "High number of authentication failures"
+        description: "More than 10 authentication failures per 5 minutes"
+        impact: "Potential brute force attack or misconfiguration"
+        action: "Review authentication logs and check for attacks"
+
+    - alert: UnusualLoginPattern
+      expr: rate(successful_logins_total[1m]) > 50
+      for: 1m
+      labels:
+        severity: warning
+        category: security
+      annotations:
+        summary: "Unusual login pattern detected"
+        description: "Login rate is above normal threshold"
+        action: "Review login patterns and check for bot activity"
+
+    - alert: SensitiveDataExposure
+      expr: increase(sensitive_data_access_total[5m]) > 0
+      for: 1m
+      labels:
+        severity: critical
+        category: security
+      annotations:
+        summary: "Potential sensitive data exposure"
+        description: "Sensitive data access patterns detected"
+        action: "Review access logs and audit data exposure"
+
+    # Business Logic Alerts - Investment Platform Specific
+    - alert: HighInvestmentVolume
+      expr: rate(investment_transactions_total[5m]) > 100
+      for: 2m
+      labels:
+        severity: info
+        category: business
+      annotations:
+        summary: "High investment transaction volume"
+        description: "Investment transaction rate is above 100 per 5 minutes"
+        action: "Monitor system performance and scaling requirements"
+
+    - alert: FailedPaymentProcessing
+      expr: rate(payment_failures_total[5m]) > 5
+      for: 2m
+      labels:
+        severity: critical
+        category: business
+      annotations:
+        summary: "Payment processing failures"
+        description: "Payment failure rate is above threshold"
+        impact: "Revenue impact and poor user experience"
+        action: "Check payment gateway status and configuration"
+
+    - alert: KYCVerificationSpike
+      expr: rate(kyc_verification_requests_total[5m]) > 20
+      for: 2m
+      labels:
+        severity: warning
+        category: compliance
+      annotations:
+        summary: "High KYC verification requests"
+        description: "KYC verification request rate is above normal"
+        action: "Review KYC process and potential bottlenecks"
+
+    # Compliance Alerts - SOC 2, PCI DSS, GDPR
+    - alert: DataRetentionViolation
+      expr: increase(data_retention_violations_total[1h]) > 0
+      for: 1m
+      labels:
+        severity: critical
+        category: compliance
+      annotations:
+        summary: "Data retention policy violation"
+        description: "Data is being retained beyond compliance requirements"
+        action: "Review data retention policies and purge old data"
+
+    - alert: UnauthorizedDataAccess
+      expr: increase(unauthorized_data_access_total[5m]) > 0
+      for: 1m
+      labels:
+        severity: critical
+        category: compliance
+      annotations:
+        summary: "Unauthorized data access detected"
+        description: "Access to sensitive data without proper authorization"
+        action: "Review access controls and audit logs"
+
+    - alert: PaymentDataExposure
+      expr: increase(payment_data_exposure_total[5m]) > 0
+      for: 1m
+      labels:
+        severity: critical
+        category: compliance
+      annotations:
+        summary: "Payment data exposure risk"
+        description: "Potential exposure of PCI DSS protected data"
+        action: "Review payment data handling and encryption"
+
+    # Infrastructure Cost Alerts
+    - alert: HighResourceUtilization
+      expr: (container_cpu_usage_seconds_total / container_spec_cpu_quota) * 100 > 90
+      for: 10m
+      labels:
+        severity: warning
+        category: cost
+      annotations:
+        summary: "High resource utilization detected"
+        description: "Resource utilization is above 90% for more than 10 minutes"
+        action: "Consider scaling or resource optimization"
+
+    # Container Health Alerts
+    - alert: ContainerRestarting
+      expr: increase(container_restarts_total[5m]) > 3
+      for: 2m
+      labels:
+        severity: warning
+        category: infrastructure
+      annotations:
+        summary: "Container is restarting frequently"
+        description: "Container has restarted more than 3 times in 5 minutes"
+        action: "Check container logs and resource constraints"
+
+    - alert: ContainerResourceLimits
+      expr: increase(container_oom_events_total[5m]) > 0
+      for: 1m
+      labels:
+        severity: critical
+        category: infrastructure
+      annotations:
+        summary: "Container out of memory"
+        description: "Container has run out of memory"
+        action: "Increase memory limits or investigate memory usage"
+
+    # External Service Dependencies
+    - alert: ExternalServiceUnavailable
+      expr: increase(external_service_failures_total[5m]) > 5
+      for: 2m
+      labels:
+        severity: warning
+        service: "{{ $labels.service }}"
+        category: external
+      annotations:
+        summary: "External service {{ $labels.service }} is unavailable"
+        description: "External service has failed more than 5 times in 5 minutes"
+        action: "Check external service status and fallback mechanisms"
+
+    # Monitoring System Health
+    - alert: PrometheusTargetMissing
+      expr: up{job=~"backend|frontend|postgres|redis|nginx"} == 0
+      for: 5m
+      labels:
+        severity: warning
+        category: monitoring
+      annotations:
+        summary: "Prometheus target missing"
+        description: "Prometheus target has been missing for more than 5 minutes"
+        action: "Check target configuration and network connectivity"
+
+    # SLA Compliance Monitoring
+    - alert: SLA99_9Violation
+      expr: |
+        (
+          rate(http_requests_total[5m]) > 0
+        ) and (
+          rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m])
+        ) * 100 > 0.1
+      for: 10m
+      labels:
+        severity: critical
+        category: sla
+      annotations:
+        summary: "99.9% SLA violation detected"
+        description: "Error rate above 0.1% for more than 10 minutes, violating 99.9% uptime SLA"
+        impact: "SLA breach with potential penalties"
+        action: "Immediate investigation and resolution required"
