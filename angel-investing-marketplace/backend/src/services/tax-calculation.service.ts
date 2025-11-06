@@ -419,7 +419,11 @@ export class TaxCalculationService {
             include: {
               shareCertificate: {
                 include: {
-                  investment: true,
+                  investment: {
+                    include: {
+                      pitch: true,
+                    },
+                  },
                 },
               },
             },

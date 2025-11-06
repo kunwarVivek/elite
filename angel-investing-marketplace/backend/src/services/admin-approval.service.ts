@@ -676,13 +676,13 @@ export class AdminApprovalService {
     // Create notification for lead
     const syndicate = await prisma.syndicate.findUnique({
       where: { id: syndicateId },
-      include: { lead: true },
+      include: { leadInvestor: true },
     });
 
-    if (syndicate?.lead) {
+    if (syndicate?.leadInvestor) {
       await prisma.notification.create({
         data: {
-          userId: syndicate.lead.id,
+          userId: syndicate.leadInvestor.id,
           type: 'SYNDICATE',
           title: approved ? 'Syndicate Approved' : 'Syndicate Rejected',
           content: approved
@@ -843,18 +843,21 @@ export class AdminApprovalService {
         select: { id: true },
       });
 
-      const notifications = admins.map((admin) => ({
-        userId: admin.id,
-        type: 'SYSTEM',
-        title: `New ${approval.entityType} Approval Required`,
-        content: `A new ${approval.entityType.toLowerCase()} approval request has been submitted. Priority: ${approval.priority}`,
-        priority: approval.priority === 'URGENT' ? 'HIGH' : 'MEDIUM',
-        metadata: {
-          approvalId: approval.id,
-          entityType: approval.entityType,
-          entityId: approval.entityId,
-        },
-      }));
+      const notifications = admins.map((admin) => {
+        const priority = approval.priority === 'URGENT' ? 'HIGH' : 'MEDIUM';
+        return {
+          userId: admin.id,
+          type: 'SYSTEM' as const,
+          title: `New ${approval.entityType} Approval Required`,
+          content: `A new ${approval.entityType.toLowerCase()} approval request has been submitted. Priority: ${approval.priority}`,
+          priority: priority as 'HIGH' | 'MEDIUM',
+          metadata: {
+            approvalId: approval.id,
+            entityType: approval.entityType,
+            entityId: approval.entityId,
+          },
+        };
+      });
 
       await prisma.notification.createMany({
         data: notifications,

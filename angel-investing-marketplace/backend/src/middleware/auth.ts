@@ -71,6 +71,9 @@ export const authorize = (...roles: string[]) => {
   };
 };
 
+// Alias for authorize - requires specific role(s)
+export const requireRole = (...roles: string[]) => authorize(...roles);
+
 // Optional authentication middleware (doesn't fail if no auth)
 export const optionalAuth = async (req: Request, res: Response, next: NextFunction) => {
   try {

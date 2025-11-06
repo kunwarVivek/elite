@@ -153,6 +153,7 @@ model Pitch {
   id                   String      @id @default(cuid())
   startupId            String
   title                String
+  companyName          String?
   slug                 String      @unique
   summary              String?
   problemStatement     String?
@@ -214,6 +215,7 @@ model Investment {
   paymentMethod    String?
   paymentReference String?
   investmentDate   DateTime?
+  approvedAt       DateTime?
   completedAt      DateTime?
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
@@ -224,7 +226,7 @@ model Investment {
   transactions      Transaction[]
   messages          Message[]
   // New relations for SPV and Share Certificates
-  spvInvestments    SPVInvestment[]
+  spvInvestments    SpvInvestment[]
   shareCertificates ShareCertificate[]
   // Compliance relations
   secRegulationD    SECRegulationD?
@@ -542,6 +544,7 @@ model Notification {
   title     String
   content   String
   data      Json?
+  metadata  Json?
   isRead    Boolean              @default(false)
   readAt    DateTime?
   actionUrl String?
@@ -620,7 +623,7 @@ model Syndicate {
 
   leadInvestor User                  @relation("SyndicateLead", fields: [leadInvestorId], references: [id])
   investments  SyndicateInvestment[]
-  spvs         SPV[]
+  spvs         Spv[]
   messages     SyndicateMessage[]
   documents    SyndicateDocument[]
 
@@ -659,7 +662,7 @@ model SyndicateInvestment {
 // SPV MANAGEMENT
 // ============================================================================
 
-model SPV {
+model Spv {
   id                 String    @id @default(cuid())
   name               String
   legalName          String
@@ -677,7 +680,7 @@ model SPV {
   updatedAt          DateTime  @updatedAt
 
   syndicate         Syndicate          @relation(fields: [syndicateId], references: [id], onDelete: Cascade)
-  investments       SPVInvestment[]
+  investments       SpvInvestment[]
   shareCertificates ShareCertificate[]
 
   // Indexes
@@ -688,7 +691,7 @@ model SPV {
   @@map("spvs")
 }
 
-model SPVInvestment {
+model SpvInvestment {
   id                  String              @id @default(cuid())
   spvId               String
   investmentId        String              @unique
@@ -698,7 +701,7 @@ model SPVInvestment {
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
 
-  spv        SPV        @relation(fields: [spvId], references: [id], onDelete: Cascade)
+  spv        Spv        @relation(fields: [spvId], references: [id], onDelete: Cascade)
   investment Investment @relation(fields: [investmentId], references: [id])
 
   // Indexes
@@ -789,7 +792,7 @@ model ShareCertificate {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  spv              SPV        @relation(fields: [spvId], references: [id])
+  spv              Spv        @relation(fields: [spvId], references: [id])
   originalInvestor User       @relation("OriginalShareholder", fields: [originalInvestorId], references: [id])
   currentOwner     User       @relation("CurrentShareholder", fields: [currentOwnerId], references: [id])
   investment       Investment @relation(fields: [investmentId], references: [id])
@@ -893,6 +896,8 @@ model ComplianceProfile {
   kycStatus                    KycStatus            @default(PENDING)
   kycVerifiedAt                DateTime?
   kycDocuments                 Json?
+  taxId                        String?
+  address                      Json?
   amlStatus                    AmlStatus            @default(PENDING)
   amlVerifiedAt                DateTime?
   riskScore                    Int                  @default(0)
@@ -1341,8 +1346,11 @@ enum DocumentType {
 
 enum NotificationType {
   INVESTMENT_UPDATE
+  INVESTMENT
   MESSAGE
   PITCH_UPDATE
+  PITCH
+  SYNDICATE
   SYSTEM
   PAYMENT
 }
@@ -1421,6 +1429,7 @@ enum SyndicateInvestmentStatus {
 enum SPVStatus {
   FORMING
   ACTIVE
+  REJECTED
   DISSOLVING
   DISSOLVED
 }
