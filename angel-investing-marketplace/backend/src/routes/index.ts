@@ -18,6 +18,7 @@ import accreditationRoutes from './accreditation.routes.js';
 import complianceRoutes from './compliance.routes.js';
 import taxRoutes from './tax.routes.js';
 import adminApprovalRoutes from './admin-approval.routes.js';
+import companyUpdateRoutes from './company-update.routes.js';
 
 // Create main router
 const router = Router();
@@ -53,6 +54,7 @@ router.get('/', (req, res) => {
         compliance: '/api/compliance',
         tax: '/api/tax',
         adminApprovals: '/api/admin/approvals',
+        updates: '/api/updates',
         trading: '/api/trading',
         messages: '/api/messages',
         notifications: '/api/notifications',
@@ -77,6 +79,7 @@ router.use('/accreditation', apiVersion('v1'), accreditationRoutes);
 router.use('/compliance', apiVersion('v1'), complianceRoutes);
 router.use('/tax', apiVersion('v1'), taxRoutes);
 router.use('/admin/approvals', apiVersion('v1'), adminApprovalRoutes);
+router.use('/updates', apiVersion('v1'), companyUpdateRoutes);
 router.use('/messages', apiVersion('v1'), messageRoutes);
 router.use('/documents', apiVersion('v1'), documentRoutes);
 router.use('/notifications', apiVersion('v1'), notificationRoutes);

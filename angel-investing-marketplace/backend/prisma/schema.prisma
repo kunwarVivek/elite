@@ -59,9 +59,14 @@ model User {
   // Auth relations
   accounts                  Account[]
   // Admin approval relations
-  requestedApprovals        AdminApproval[]   @relation("ApprovalRequester")
-  assignedApprovals         AdminApproval[]   @relation("ApprovalAssignee")
-  reviewedApprovals         AdminApproval[]   @relation("ApprovalReviewer")
+  requestedApprovals        AdminApproval[]      @relation("ApprovalRequester")
+  assignedApprovals         AdminApproval[]      @relation("ApprovalAssignee")
+  reviewedApprovals         AdminApproval[]      @relation("ApprovalReviewer")
+  // Company update relations
+  authoredUpdates           CompanyUpdate[]      @relation("UpdateAuthor")
+  updateEngagements         UpdateEngagement[]   @relation("UpdateEngagements")
+  updateReactions           UpdateReaction[]     @relation("UpdateReactions")
+  updateComments            UpdateComment[]      @relation("UpdateComments")
 
   // Indexes
   @@index([email])
@@ -124,9 +129,10 @@ model Startup {
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
 
-  founder   User       @relation("StartupFounder", fields: [founderId], references: [id])
-  pitches   Pitch[]
-  documents Document[]
+  founder        User            @relation("StartupFounder", fields: [founderId], references: [id])
+  pitches        Pitch[]
+  documents      Document[]
+  companyUpdates CompanyUpdate[]
 
   // Indexes
   @@index([founderId])
@@ -361,6 +367,119 @@ model Comment {
   @@index([createdAt])
   @@index([pitchId, createdAt])
   @@map("comments")
+}
+
+// ============================================================================
+// COMPANY UPDATES & COMMUNICATIONS
+// ============================================================================
+
+model CompanyUpdate {
+  id              String             @id @default(cuid())
+  startupId       String
+  authorId        String
+  title           String
+  slug            String             @unique
+  content         String             @db.Text
+  excerpt         String?
+  updateType      UpdateType
+  category        UpdateCategory?
+  tags            String[]           @default([])
+  coverImageUrl   String?
+  attachments     Json?              @default("[]")
+  metadata        Json?              @default("{}")
+  status          UpdateStatus       @default(DRAFT)
+  publishedAt     DateTime?
+  scheduledFor    DateTime?
+  viewCount       Int                @default(0)
+  reactionCount   Int                @default(0)
+  commentCount    Int                @default(0)
+  isHighlighted   Boolean            @default(false)
+  isPinned        Boolean            @default(false)
+  notifyInvestors Boolean            @default(true)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  startup      Startup             @relation(fields: [startupId], references: [id], onDelete: Cascade)
+  author       User                @relation("UpdateAuthor", fields: [authorId], references: [id])
+  engagements  UpdateEngagement[]
+  comments     UpdateComment[]
+  reactions    UpdateReaction[]
+
+  // Indexes
+  @@index([startupId])
+  @@index([authorId])
+  @@index([status])
+  @@index([updateType])
+  @@index([category])
+  @@index([publishedAt])
+  @@index([createdAt])
+  @@index([startupId, status])
+  @@index([startupId, publishedAt])
+  @@index([isPinned, publishedAt])
+  @@map("company_updates")
+}
+
+model UpdateEngagement {
+  id        String   @id @default(cuid())
+  updateId  String
+  userId    String
+  viewedAt  DateTime @default(now())
+  timeSpent Int?     // seconds
+  scrollDepth Float? // percentage
+  createdAt DateTime @default(now())
+
+  update CompanyUpdate @relation(fields: [updateId], references: [id], onDelete: Cascade)
+  user   User          @relation("UpdateEngagements", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Unique constraint - one engagement record per user per update
+  @@unique([updateId, userId])
+  @@index([updateId])
+  @@index([userId])
+  @@index([viewedAt])
+  @@map("update_engagements")
+}
+
+model UpdateReaction {
+  id        String       @id @default(cuid())
+  updateId  String
+  userId    String
+  type      ReactionType
+  createdAt DateTime     @default(now())
+
+  update CompanyUpdate @relation(fields: [updateId], references: [id], onDelete: Cascade)
+  user   User          @relation("UpdateReactions", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Unique constraint - one reaction per user per update
+  @@unique([updateId, userId])
+  @@index([updateId])
+  @@index([userId])
+  @@index([type])
+  @@map("update_reactions")
+}
+
+model UpdateComment {
+  id              String   @id @default(cuid())
+  updateId        String
+  userId          String
+  parentCommentId String?
+  content         String   @db.Text
+  isEdited        Boolean  @default(false)
+  likesCount      Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  update        CompanyUpdate  @relation(fields: [updateId], references: [id], onDelete: Cascade)
+  user          User           @relation("UpdateComments", fields: [userId], references: [id])
+  parentComment UpdateComment? @relation("UpdateCommentReplies", fields: [parentCommentId], references: [id])
+  replies       UpdateComment[] @relation("UpdateCommentReplies")
+
+  // Indexes
+  @@index([updateId])
+  @@index([userId])
+  @@index([parentCommentId])
+  @@index([createdAt])
+  @@index([updateId, createdAt])
+  @@map("update_comments")
 }
 
 // ============================================================================
@@ -1232,6 +1351,49 @@ enum NotificationPriority {
   LOW
   MEDIUM
   HIGH
+}
+
+// ============================================================================
+// COMPANY UPDATE ENUMS
+// ============================================================================
+
+enum UpdateType {
+  MILESTONE
+  FINANCIAL
+  PRODUCT
+  TEAM
+  FUNDRAISING
+  MARKET
+  PARTNERSHIP
+  MEDIA
+  GENERAL
+}
+
+enum UpdateCategory {
+  ACHIEVEMENT
+  ANNOUNCEMENT
+  PROGRESS_REPORT
+  QUARTERLY_UPDATE
+  INVESTOR_UPDATE
+  PRESS_RELEASE
+  EVENT
+  BLOG_POST
+}
+
+enum UpdateStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+  DELETED
+}
+
+enum ReactionType {
+  LIKE
+  CELEBRATE
+  SUPPORT
+  INSIGHTFUL
+  CURIOUS
 }
 
 // ============================================================================
