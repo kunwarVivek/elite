@@ -37,6 +37,7 @@
     "@aws-sdk/s3-request-presigner": "^3.901.0",
     "@prisma/client": "^5.7.1",
     "@socket.io/redis-adapter": "^8.3.0",
+    "archiver": "^7.0.1",
     "bcryptjs": "^2.4.3",
     "better-auth": "^0.8.0",
     "bullmq": "^5.1.4",
@@ -53,6 +54,7 @@
     "nodemailer": "^6.9.8",
     "plaid": "^15.3.0",
     "prisma": "^5.7.1",
+    "puppeteer": "^23.11.1",
     "redis": "^5.8.3",
     "sharp": "^0.33.2",
     "socket.io": "^4.8.1",
@@ -61,6 +63,7 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@types/archiver": "^6.0.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
     "@types/dotenv": "^6.1.1",

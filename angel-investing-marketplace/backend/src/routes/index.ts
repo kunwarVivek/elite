@@ -14,6 +14,13 @@ import syndicateRoutes from './syndicate.routes.js';
 import messageRoutes from './message.routes.js';
 import documentRoutes from './document.routes.js';
 import notificationRoutes from './notification.routes.js';
+import accreditationRoutes from './accreditation.routes.js';
+import complianceRoutes from './compliance.routes.js';
+import taxRoutes from './tax.routes.js';
+import adminApprovalRoutes from './admin-approval.routes.js';
+import companyUpdateRoutes from './company-update.routes.js';
+import marketplaceRoutes from './marketplace.routes.js';
+import socialRoutes from './social.routes.js';
 
 // Create main router
 const router = Router();
@@ -44,7 +51,13 @@ router.get('/', (req, res) => {
         investments: '/api/investments',
         payments: '/api/payments',
         portfolio: '/api/portfolio',
-        trading: '/api/trading',
+        syndicates: '/api/syndicates',
+        accreditation: '/api/accreditation',
+        compliance: '/api/compliance',
+        tax: '/api/tax',
+        adminApprovals: '/api/admin/approvals',
+        updates: '/api/updates',
+        marketplace: '/api/marketplace',
         messages: '/api/messages',
         notifications: '/api/notifications',
       },
@@ -64,6 +77,13 @@ router.use('/investments', apiVersion('v1'), investmentRoutes);
 router.use('/payments', apiVersion('v1'), paymentRoutes);
 router.use('/portfolio', apiVersion('v1'), portfolioRoutes);
 router.use('/syndicates', apiVersion('v1'), syndicateRoutes);
+router.use('/accreditation', apiVersion('v1'), accreditationRoutes);
+router.use('/compliance', apiVersion('v1'), complianceRoutes);
+router.use('/tax', apiVersion('v1'), taxRoutes);
+router.use('/admin/approvals', apiVersion('v1'), adminApprovalRoutes);
+router.use('/updates', apiVersion('v1'), companyUpdateRoutes);
+router.use('/marketplace', apiVersion('v1'), marketplaceRoutes);
+router.use('/social', apiVersion('v1'), socialRoutes);
 router.use('/messages', apiVersion('v1'), messageRoutes);
 router.use('/documents', apiVersion('v1'), documentRoutes);
 router.use('/notifications', apiVersion('v1'), notificationRoutes);
