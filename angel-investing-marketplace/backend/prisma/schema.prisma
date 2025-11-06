@@ -25,6 +25,8 @@ model User {
   avatarUrl     String?
   profileData   Json?
   isVerified    Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  approvedAt    DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -56,6 +58,10 @@ model User {
   complianceProfile         ComplianceProfile?
   // Auth relations
   accounts                  Account[]
+  // Admin approval relations
+  requestedApprovals        AdminApproval[]   @relation("ApprovalRequester")
+  assignedApprovals         AdminApproval[]   @relation("ApprovalAssignee")
+  reviewedApprovals         AdminApproval[]   @relation("ApprovalReviewer")
 
   // Indexes
   @@index([email])
@@ -158,6 +164,7 @@ model Pitch {
   viewCount            Int         @default(0)
   isFeatured           Boolean     @default(false)
   expiresAt            DateTime?
+  approvedAt           DateTime?
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
 
@@ -488,6 +495,7 @@ model Syndicate {
   formationDate     DateTime?
   closingDate       DateTime?
   isActive          Boolean         @default(true)
+  approvedAt        DateTime?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
@@ -1062,6 +1070,69 @@ model Alert {
 }
 
 // ============================================================================
+// ADMIN APPROVAL SYSTEM
+// ============================================================================
+
+model AdminApproval {
+  id           String            @id @default(cuid())
+  entityType   ApprovalEntityType
+  entityId     String
+  requestedBy  String
+  assignedTo   String?
+  reviewedBy   String?
+  status       ApprovalStatus    @default(PENDING)
+  priority     ApprovalPriority  @default(MEDIUM)
+  reason       String?           @db.Text
+  reviewNotes  String?           @db.Text
+  tags         String[]          @default([])
+  metadata     Json              @default("{}")
+  slaDeadline  DateTime
+  reviewedAt   DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  // Relations
+  requester    User              @relation("ApprovalRequester", fields: [requestedBy], references: [id], onDelete: Cascade)
+  assignee     User?             @relation("ApprovalAssignee", fields: [assignedTo], references: [id], onDelete: SetNull)
+  reviewer     User?             @relation("ApprovalReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
+  auditLogs    ApprovalAuditLog[]
+
+  // Indexes
+  @@index([entityType])
+  @@index([entityId])
+  @@index([status])
+  @@index([priority])
+  @@index([requestedBy])
+  @@index([assignedTo])
+  @@index([reviewedBy])
+  @@index([slaDeadline])
+  @@index([createdAt])
+  @@index([status, priority])
+  @@index([entityType, status])
+  @@index([assignedTo, status])
+  @@map("admin_approvals")
+}
+
+model ApprovalAuditLog {
+  id          String   @id @default(cuid())
+  approvalId  String
+  action      String
+  performedBy String
+  details     Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  // Relations
+  approval    AdminApproval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([approvalId])
+  @@index([action])
+  @@index([performedBy])
+  @@index([createdAt])
+  @@map("approval_audit_logs")
+}
+
+// ============================================================================
 // ENUMS
 // ============================================================================
 
@@ -1096,6 +1167,7 @@ enum PitchStatus {
   DRAFT
   UNDER_REVIEW
   ACTIVE
+  REJECTED
   FUNDED
   CLOSED
   WITHDRAWN
@@ -1103,6 +1175,8 @@ enum PitchStatus {
 
 enum InvestmentStatus {
   PENDING
+  APPROVED
+  REJECTED
   ESCROW
   DUE_DILIGENCE
   LEGAL_REVIEW
@@ -1167,6 +1241,7 @@ enum NotificationPriority {
 enum SyndicateStatus {
   FORMING
   ACTIVE
+  REJECTED
   FULLY_FUNDED
   CLOSING
   CLOSED
@@ -1284,6 +1359,37 @@ enum VerificationMethod {
   THIRD_PARTY_VERIFICATION
   DOCUMENTARY_EVIDENCE
   EXISTING_RELATIONSHIP
+}
+
+// ============================================================================
+// ADMIN APPROVAL ENUMS
+// ============================================================================
+
+enum ApprovalEntityType {
+  INVESTMENT
+  PITCH
+  SYNDICATE
+  USER
+  KYC
+  ACCREDITATION
+  SPV
+  DOCUMENT
+}
+
+enum ApprovalStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  REQUIRES_MORE_INFO
+  ESCALATED
+}
+
+enum ApprovalPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
 }
 
 // ============================================================================
