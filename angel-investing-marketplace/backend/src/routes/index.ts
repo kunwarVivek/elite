@@ -14,6 +14,7 @@ import syndicateRoutes from './syndicate.routes.js';
 import messageRoutes from './message.routes.js';
 import documentRoutes from './document.routes.js';
 import notificationRoutes from './notification.routes.js';
+import accreditationRoutes from './accreditation.routes.js';
 
 // Create main router
 const router = Router();
@@ -44,6 +45,8 @@ router.get('/', (req, res) => {
         investments: '/api/investments',
         payments: '/api/payments',
         portfolio: '/api/portfolio',
+        syndicates: '/api/syndicates',
+        accreditation: '/api/accreditation',
         trading: '/api/trading',
         messages: '/api/messages',
         notifications: '/api/notifications',
@@ -64,6 +67,7 @@ router.use('/investments', apiVersion('v1'), investmentRoutes);
 router.use('/payments', apiVersion('v1'), paymentRoutes);
 router.use('/portfolio', apiVersion('v1'), portfolioRoutes);
 router.use('/syndicates', apiVersion('v1'), syndicateRoutes);
+router.use('/accreditation', apiVersion('v1'), accreditationRoutes);
 router.use('/messages', apiVersion('v1'), messageRoutes);
 router.use('/documents', apiVersion('v1'), documentRoutes);
 router.use('/notifications', apiVersion('v1'), notificationRoutes);
