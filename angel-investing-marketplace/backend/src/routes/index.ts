@@ -16,6 +16,7 @@ import documentRoutes from './document.routes.js';
 import notificationRoutes from './notification.routes.js';
 import accreditationRoutes from './accreditation.routes.js';
 import complianceRoutes from './compliance.routes.js';
+import taxRoutes from './tax.routes.js';
 
 // Create main router
 const router = Router();
@@ -49,6 +50,7 @@ router.get('/', (req, res) => {
         syndicates: '/api/syndicates',
         accreditation: '/api/accreditation',
         compliance: '/api/compliance',
+        tax: '/api/tax',
         trading: '/api/trading',
         messages: '/api/messages',
         notifications: '/api/notifications',
@@ -71,6 +73,7 @@ router.use('/portfolio', apiVersion('v1'), portfolioRoutes);
 router.use('/syndicates', apiVersion('v1'), syndicateRoutes);
 router.use('/accreditation', apiVersion('v1'), accreditationRoutes);
 router.use('/compliance', apiVersion('v1'), complianceRoutes);
+router.use('/tax', apiVersion('v1'), taxRoutes);
 router.use('/messages', apiVersion('v1'), messageRoutes);
 router.use('/documents', apiVersion('v1'), documentRoutes);
 router.use('/notifications', apiVersion('v1'), notificationRoutes);
