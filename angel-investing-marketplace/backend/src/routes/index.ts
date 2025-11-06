@@ -20,6 +20,7 @@ import taxRoutes from './tax.routes.js';
 import adminApprovalRoutes from './admin-approval.routes.js';
 import companyUpdateRoutes from './company-update.routes.js';
 import marketplaceRoutes from './marketplace.routes.js';
+import socialRoutes from './social.routes.js';
 
 // Create main router
 const router = Router();
@@ -82,6 +83,7 @@ router.use('/tax', apiVersion('v1'), taxRoutes);
 router.use('/admin/approvals', apiVersion('v1'), adminApprovalRoutes);
 router.use('/updates', apiVersion('v1'), companyUpdateRoutes);
 router.use('/marketplace', apiVersion('v1'), marketplaceRoutes);
+router.use('/social', apiVersion('v1'), socialRoutes);
 router.use('/messages', apiVersion('v1'), messageRoutes);
 router.use('/documents', apiVersion('v1'), documentRoutes);
 router.use('/notifications', apiVersion('v1'), notificationRoutes);
