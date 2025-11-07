@@ -1,0 +1,259 @@
+# Elite Angel Investing Marketplace - .dockerignore
+# Excludes files from Docker build context to speed up builds and reduce image size
+
+# ============================================================================
+# NODE.JS & NPM
+# ============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Lock files - keep package-lock.json, ignore others
+pnpm-lock.yaml
+# yarn.lock
+
+# ============================================================================
+# GIT
+# ============================================================================
+.git/
+.gitignore
+.gitattributes
+.gitmodules
+
+# GitHub specific
+.github/
+
+# ============================================================================
+# ENVIRONMENT & SECRETS
+# ============================================================================
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production.local
+.env.*.local
+
+# Keep .env.example for reference
+!.env.example
+
+# Secrets
+*.key
+*.pem
+*.p12
+*.pfx
+secrets.json
+credentials.json
+
+# ============================================================================
+# BUILD OUTPUTS (will be rebuilt in container)
+# ============================================================================
+dist/
+build/
+out/
+.next/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# ============================================================================
+# DEVELOPMENT FILES
+# ============================================================================
+# Documentation (not needed in production image)
+*.md
+!README.md
+docs/
+CHANGELOG.md
+CONTRIBUTING.md
+LICENSE
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+azure-pipelines.yml
+.buildkite/
+
+# Docker files (already being used)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# ============================================================================
+# IDE & EDITOR FILES
+# ============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.vim/
+*.sublime-project
+*.sublime-workspace
+
+# ============================================================================
+# OPERATING SYSTEM FILES
+# ============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ============================================================================
+# LOGS
+# ============================================================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# ============================================================================
+# TESTING & COVERAGE (not needed in production)
+# ============================================================================
+coverage/
+.nyc_output/
+*.lcov
+test-results/
+playwright-report/
+.playwright/
+cypress/
+__tests__/
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+**/*.test.js
+**/*.spec.js
+jest.config.js
+jest.config.ts
+vitest.config.ts
+
+# Test data
+test-data/
+fixtures/
+__mocks__/
+
+# ============================================================================
+# TEMPORARY & CACHE FILES
+# ============================================================================
+tmp/
+temp/
+*.tmp
+.cache/
+.parcel-cache/
+.vite/
+
+# npm cache
+.npm/
+
+# ESLint cache
+.eslintcache
+
+# Prettier cache
+.prettiercache
+
+# ============================================================================
+# DATABASES (local development data)
+# ============================================================================
+*.db
+*.sqlite
+*.sqlite3
+postgres-data/
+redis-data/
+docker-volumes/
+pgdata/
+dump.rdb
+appendonly.aof
+
+# ============================================================================
+# CLOUD & DEPLOYMENT
+# ============================================================================
+.vercel/
+.netlify/
+.firebase/
+.serverless/
+.aws/
+.gcloud/
+.azure/
+
+# ============================================================================
+# UPLOADS & USER CONTENT (local dev)
+# ============================================================================
+# Don't copy local uploads to image - use volumes in production
+uploads/
+public/uploads/
+static/uploads/
+generated-pdfs/
+tax-documents/*.pdf
+
+# ============================================================================
+# AI AGENT FILES
+# ============================================================================
+.claudiomiro/
+.serena/
+.claudiomiro_log.txt
+
+# ============================================================================
+# MISC DEVELOPMENT FILES
+# ============================================================================
+# Backup files
+*.bak
+*.backup
+*.old
+*.orig
+
+# Archive files
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+
+# Scripts (may contain dev-only scripts)
+scripts/dev/
+scripts/local/
+
+# Storybook
+.storybook/
+storybook-static/
+
+# E2E tests
+e2e/
+
+# Performance profiling
+*.cpuprofile
+*.heapprofile
+*.heapsnapshot
+
+# ============================================================================
+# KEEP IN DOCKER IMAGE (negated patterns)
+# ============================================================================
+# Keep package files (needed for npm install)
+!package.json
+!package-lock.json
+
+# Keep Prisma schema and migrations
+!**/prisma/schema.prisma
+!**/prisma/migrations/
+
+# Keep source code
+!src/
+!public/
+
+# Keep configuration needed for runtime
+!tsconfig.json
+!vite.config.ts
+!tailwind.config.js
+!postcss.config.js
+
+# Keep .env.example as reference
+!.env.example

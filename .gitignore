@@ -1,4 +1,4 @@
-# Angel Investing Marketplace - Application .gitignore
+# Elite Angel Investing Marketplace - Root .gitignore
 
 # ============================================================================
 # NODE.JS & NPM
@@ -10,62 +10,60 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Package manager lock files (keep package-lock.json, ignore others as needed)
+# pnpm-lock.yaml
+# yarn.lock
+
 # ============================================================================
 # ENVIRONMENT & SECRETS
 # ============================================================================
 .env
 .env.local
+.env.development
 .env.development.local
+.env.test
 .env.test.local
+.env.production
 .env.production.local
+.env.*.local
 
-# Keep .env.example for setup reference
-!.env.example
-!backend/.env.example
-!frontend/.env.example
+# Secrets and credentials
+*.key
+*.pem
+*.p12
+*.pfx
+secrets.json
+credentials.json
+config/production.json
+.aws/
+.gcloud/
+.azure/
 
 # ============================================================================
-# BUILD OUTPUTS
+# BUILD OUTPUTS & GENERATED CODE
 # ============================================================================
 dist/
 build/
-.next/
 out/
+.next/
 .vercel/
 .netlify/
 
-# TypeScript
+# TypeScript build info
 *.tsbuildinfo
 *.d.ts.map
 
 # Vite
 .vite/
 
-# ============================================================================
-# PRISMA SPECIFIC
-# ============================================================================
-# Prisma generates client - regenerate with: npx prisma generate
+# Prisma generated client (regenerate with: npx prisma generate)
 **/node_modules/@prisma/client/
 **/node_modules/.prisma/
-
-# Prisma migration backups (auto-generated)
-**/prisma/migrations/**/migration.sql.bak
-
-# Keep migrations folder and files
-!**/prisma/migrations/
-!**/prisma/migrations/**/*.sql
-!**/prisma/schema.prisma
-
-# Local database files (SQLite - if using for dev)
-prisma/*.db
-prisma/*.db-journal
-
-# Prisma Studio artifacts
-.studio/
 
 # ============================================================================
 # DATABASES
 # ============================================================================
+# SQLite (local dev databases)
 *.db
 *.sqlite
 *.sqlite3
@@ -73,93 +71,132 @@ prisma/*.db-journal
 *.db-wal
 *.db-shm
 
-# PostgreSQL dumps
+# PostgreSQL local dumps
 *.sql.gz
 *.dump
+pgdata/
 
 # Redis dumps
 dump.rdb
 appendonly.aof
 
-# ============================================================================
-# BACKEND SPECIFIC
-# ============================================================================
-# Generated PDFs (tax documents - regenerate on demand)
-backend/generated-pdfs/
-backend/tax-documents/*.pdf
-backend/uploads/
-
-# Puppeteer downloads (skip with PUPPETEER_SKIP_DOWNLOAD=true)
-backend/node_modules/puppeteer/.local-chromium/
-
-# BullMQ job data (if persisted locally)
-backend/.bullmq/
-
-# Winston logs
-backend/logs/
-backend/*.log
+# Database migration backups
+*.migration.bak
 
 # ============================================================================
-# FRONTEND SPECIFIC
-# ============================================================================
-# Vite build output
-frontend/dist/
-frontend/build/
-
-# Vite cache
-frontend/.vite/
-
-# Frontend logs
-frontend/*.log
-
-# ============================================================================
-# IDE AND EDITOR FILES
-# ============================================================================
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# ============================================================================
-# OS GENERATED FILES
-# ============================================================================
-# macOS
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-
-# Windows
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-
-# Linux
-.directory
-
-# ============================================================================
-# LOGS
+# LOGS & RUNTIME
 # ============================================================================
 logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# PM2
+.pm2/
+pm2.log
 
 # ============================================================================
 # TESTING & COVERAGE
 # ============================================================================
 coverage/
-*.lcov
 .nyc_output/
+*.lcov
 test-results/
 playwright-report/
 .playwright/
 
+# Jest
+jest-*.json
+
+# Cypress
+cypress/videos/
+cypress/screenshots/
+
 # ============================================================================
-# TEMPORARY & CACHE
+# IDE & EDITOR FILES
+# ============================================================================
+# VS Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json.example
+*.code-workspace
+
+# JetBrains IDEs (WebStorm, IntelliJ, etc.)
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim
+*.swp
+*.swo
+*~
+.vim/
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ============================================================================
+# OPERATING SYSTEM FILES
+# ============================================================================
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+.fseventsd
+.TemporaryItems
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+.directory
+.Trash-*
+
+# ============================================================================
+# DOCKER
+# ============================================================================
+.dockerignore
+
+# Docker volumes (if local)
+docker-volumes/
+postgres-data/
+redis-data/
+
+# Docker compose override files (local development)
+docker-compose.override.yml
+
+# ============================================================================
+# TEMPORARY & CACHE FILES
 # ============================================================================
 tmp/
 temp/
+*.tmp
 .cache/
 .parcel-cache/
 
@@ -175,38 +212,60 @@ temp/
 # Stylelint cache
 .stylelintcache
 
-# ============================================================================
-# DOCKER
-# ============================================================================
-.dockerignore
+# Next.js cache
+.next/
 
-# ============================================================================
-# CLOUD & DEPLOYMENT
-# ============================================================================
-.vercel/
-.netlify/
-.serverless/
+# Turbo cache
+.turbo/
+
+# Rollup cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Microbundle cache
+.microbundle-cache/
 
 # ============================================================================
 # PACKAGE MANAGERS
 # ============================================================================
-# Yarn v2
+# Yarn v2/v3 (Berry)
 .yarn/cache
 .yarn/unplugged
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
 
-# pnpm
-pnpm-lock.yaml
+# ============================================================================
+# CLOUD & DEPLOYMENT
+# ============================================================================
+.vercel/
+.netlify/
+.firebase/
+firebase-debug.log
+firestore-debug.log
+.serverless/
+
+# Sentry
+.sentryclirc
 
 # ============================================================================
-# SECRETS & CREDENTIALS
+# UPLOADS & USER CONTENT (local development)
 # ============================================================================
-*.key
-*.pem
-secrets.json
-config/production.json
+uploads/
+public/uploads/
+static/uploads/
+
+# ============================================================================
+# DOCUMENTATION GENERATION
+# ============================================================================
+# TypeDoc
+docs/api/
+typedoc/
+
+# JSDoc
+jsdoc/
 
 # ============================================================================
 # MISC
@@ -214,6 +273,16 @@ config/production.json
 # Backup files
 *.bak
 *.backup
+*.old
+*.orig
+
+# Archive files
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
 
 # Optional REPL history
 .node_repl_history
@@ -233,50 +302,51 @@ config/production.json
 # FuseBox cache
 .fusebox/
 
+# Zero-Install artifacts (not needed in git)
+.pnp.js
+.pnp.cjs
+
 # Storybook build outputs
 .out/
 .storybook-out/
+storybook-static/
 
-# Microbundle cache
-.rpt2_cache/
-.rts2_cache_cjs/
-.rts2_cache_es/
-.rts2_cache_umd/
+# ============================================================================
+# PROJECT SPECIFIC
+# ============================================================================
+# Claude/AI agent files (keep these in git for context)
+# .claudiomiro/
+# .serena/
 
-# Turbo
-.turbo/
+# Generated PDFs (tax documents, etc.) - regenerate on demand
+generated-pdfs/
+tax-documents/*.pdf
 
-# Sentry
-.sentryclirc
+# Large CSV exports
+*.csv
+!seed-data/*.csv
 
-# AWS
-.aws/
+# Session recordings (if using session replay)
+recordings/
 
-# Google Cloud
-.gcloud/
-
-# Azure
-.azure/
-
-# Firebase
-.firebase/
-firebase-debug.log
-firestore-debug.log
-
-# PM2
-.pm2/
+# E2E test artifacts
+test-artifacts/
 
 # ============================================================================
 # KEEP IN GIT (negated patterns)
 # ============================================================================
-# Keep example files
-!**/*.example
-!**/*.sample
-!**/*.template
+# Keep example environment files
+!.env.example
+!.env.template
+!.env.sample
+
+# Keep migration files
+!**/prisma/migrations/**
 
 # Keep public assets
-!frontend/public/
-!backend/public/
+!public/
+!static/
 
-# Keep Prisma migrations
-!backend/prisma/migrations/
+# Keep documentation
+!docs/
+!*.md
