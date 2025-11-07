@@ -38,6 +38,17 @@ router.get('/me', userController.getProfile.bind(userController));
 // Update current user profile
 router.put('/me', uploadSingle('avatar'), validateBody(userProfileSchema), userController.updateProfile.bind(userController));
 
+// Account settings
+router.get('/account-settings', userController.getAccountSettings.bind(userController));
+router.put('/account-settings', userController.updateAccountSettings.bind(userController));
+
+// Data export and account deletion
+router.post('/export-data', userController.exportUserData.bind(userController));
+router.delete('/me', userController.deleteAccount.bind(userController));
+
+// Avatar upload
+router.post('/avatar', uploadSingle('avatar'), userController.uploadAvatar.bind(userController));
+
 // Submit KYC verification
 router.post('/:id/kyc', uploadFields([
   { name: 'document1', maxCount: 1 },

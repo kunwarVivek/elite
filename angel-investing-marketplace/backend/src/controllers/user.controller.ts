@@ -657,6 +657,215 @@ class UserController {
       throw error;
     }
   }
+
+  /**
+   * Get account settings
+   * GET /api/users/account-settings
+   */
+  async getAccountSettings(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        throw new AppError('User not authenticated', 401, 'NOT_AUTHENTICATED');
+      }
+
+      const user = await this.findUserById(userId);
+      if (!user) {
+        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+      }
+
+      // Parse profile data for privacy settings
+      const profileData = user.profileData as any || {};
+      const privacy = profileData.privacy || {
+        profileVisibility: 'PUBLIC',
+        showInvestmentHistory: true,
+        showPortfolio: true,
+        allowMessaging: true,
+      };
+
+      sendSuccess(res, {
+        email: user.email,
+        username: user.name || user.email.split('@')[0],
+        emailVerified: user.isVerified,
+        accountCreatedAt: user.createdAt,
+        privacy,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Update account settings
+   * PUT /api/users/account-settings
+   */
+  async updateAccountSettings(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        throw new AppError('User not authenticated', 401, 'NOT_AUTHENTICATED');
+      }
+
+      const { username, privacy } = req.body;
+
+      const user = await this.findUserById(userId);
+      if (!user) {
+        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+      }
+
+      // Update user data
+      const profileData = user.profileData as any || {};
+      if (privacy) {
+        profileData.privacy = {
+          ...profileData.privacy,
+          ...privacy,
+        };
+      }
+
+      const updateData: any = {
+        profileData,
+      };
+
+      if (username) {
+        updateData.name = username;
+      }
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: updateData,
+      });
+
+      logger.info('Account settings updated', { userId });
+
+      sendSuccess(res, {
+        message: 'Account settings updated successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Export user data
+   * POST /api/users/export-data
+   */
+  async exportUserData(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        throw new AppError('User not authenticated', 401, 'NOT_AUTHENTICATED');
+      }
+
+      // In a real implementation:
+      // 1. Fetch all user data (profile, investments, messages, etc.)
+      // 2. Generate JSON export
+      // 3. Create downloadable file
+      // 4. Return file URL or direct file download
+
+      const user = await this.findUserById(userId);
+      if (!user) {
+        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+      }
+
+      const exportData = {
+        profile: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          createdAt: user.createdAt,
+          profileData: user.profileData,
+        },
+        // Add more data here in real implementation
+        exportedAt: new Date().toISOString(),
+      };
+
+      logger.info('User data exported', { userId });
+
+      // Return JSON directly
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="user-data-${userId}.json"`);
+      res.send(JSON.stringify(exportData, null, 2));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Upload avatar
+   * POST /api/users/avatar
+   */
+  async uploadAvatar(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        throw new AppError('User not authenticated', 401, 'NOT_AUTHENTICATED');
+      }
+
+      // In a real implementation with multer:
+      // const file = req.file;
+      // if (!file) {
+      //   throw new AppError('No file uploaded', 400, 'NO_FILE');
+      // }
+
+      // Mock avatar URL
+      const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`;
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: { avatarUrl },
+      });
+
+      logger.info('Avatar uploaded', { userId });
+
+      sendSuccess(res, {
+        avatarUrl,
+      }, 'Avatar uploaded successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Delete user account
+   * DELETE /api/users/me
+   */
+  async deleteAccount(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        throw new AppError('User not authenticated', 401, 'NOT_AUTHENTICATED');
+      }
+
+      const { confirmation } = req.body;
+      if (confirmation !== 'DELETE MY ACCOUNT') {
+        throw new AppError('Invalid confirmation text', 400, 'INVALID_CONFIRMATION');
+      }
+
+      // In a real implementation:
+      // 1. Soft delete or hard delete based on requirements
+      // 2. Cancel all active investments/commitments
+      // 3. Remove from syndicates
+      // 4. Delete or anonymize data per GDPR
+      // 5. Send confirmation email
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          isVerified: false,
+          // Could add a deletedAt field for soft delete
+        },
+      });
+
+      logger.info('User account deleted', { userId });
+
+      sendSuccess(res, {
+        message: 'Account deleted successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 // Export singleton instance

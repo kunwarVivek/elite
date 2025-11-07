@@ -44,4 +44,12 @@ router.get('/:id/members', validateBody(syndicateMemberQuerySchema), syndicateCo
 // Syndicate deals (lead investor only)
 router.post('/:id/deals', validateBody(syndicateDealSchema), syndicateController.createSyndicateDeal.bind(syndicateController));
 
+// Apply to syndicate (application-based membership)
+router.post('/:id/apply', syndicateController.applySyndicate.bind(syndicateController));
+
+// Commitment flow
+router.post('/:id/commit', syndicateController.commitToSyndicate.bind(syndicateController));
+router.get('/commitments/:commitmentId/payment-info', syndicateController.getCommitmentPaymentInfo.bind(syndicateController));
+router.post('/commitments/:commitmentId/pay', syndicateController.processCommitmentPayment.bind(syndicateController));
+
 export default router;

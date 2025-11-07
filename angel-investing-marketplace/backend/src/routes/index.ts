@@ -23,6 +23,7 @@ import marketplaceRoutes from './marketplace.routes.js';
 import socialRoutes from './social.routes.js';
 import spvRoutes from './spv.routes.js';
 import searchRoutes from './search.routes.js';
+import paymentMethodsRoutes from './payment-methods.routes.js';
 
 // Create main router
 const router = Router();
@@ -52,6 +53,7 @@ router.get('/', (req, res) => {
         startups: '/api/startups',
         investments: '/api/investments',
         payments: '/api/payments',
+        paymentMethods: '/api/payment-methods',
         portfolio: '/api/portfolio',
         syndicates: '/api/syndicates',
         spvs: '/api/spvs',
@@ -79,6 +81,7 @@ router.use('/startups', apiVersion('v1'), startupRoutes);
 router.use('/pitches', apiVersion('v1'), pitchRoutes);
 router.use('/investments', apiVersion('v1'), investmentRoutes);
 router.use('/payments', apiVersion('v1'), paymentRoutes);
+router.use('/payment-methods', apiVersion('v1'), paymentMethodsRoutes);
 router.use('/portfolio', apiVersion('v1'), portfolioRoutes);
 router.use('/syndicates', apiVersion('v1'), syndicateRoutes);
 router.use('/spvs', apiVersion('v1'), spvRoutes);
