@@ -30,7 +30,7 @@ export interface TaxDocumentMetadata {
 }
 
 export class TaxPdfService {
-  private browser: puppeteer.Browser | null = null;
+  private browser: any = null;
 
   /**
    * Initialize browser instance

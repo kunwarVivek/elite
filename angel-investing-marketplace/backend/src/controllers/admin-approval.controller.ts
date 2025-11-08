@@ -208,7 +208,7 @@ export class AdminApprovalController {
                 startup: {
                   select: {
                     id: true,
-                    companyName: true,
+                    name: true,
                     founder: {
                       select: { id: true, name: true, email: true },
                     },

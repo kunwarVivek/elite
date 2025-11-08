@@ -61,8 +61,8 @@ export class CompanyUpdateService {
           slug,
           content: input.content,
           excerpt: input.excerpt || this.generateExcerpt(input.content),
-          updateType: input.updateType,
-          category: input.category,
+          updateType: input.updateType as any,
+          category: input.category as any,
           tags: input.tags || [],
           coverImageUrl: input.coverImageUrl,
           attachments: input.attachments || [],
@@ -119,8 +119,10 @@ export class CompanyUpdateService {
         where: { id: updateId },
         data: {
           ...data,
+          updateType: data.updateType as any,
+          category: data.category as any,
           excerpt: data.excerpt || (data.content ? this.generateExcerpt(data.content) : undefined),
-        },
+        } as any,
         include: {
           startup: true,
           author: {

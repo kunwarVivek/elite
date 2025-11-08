@@ -313,6 +313,7 @@ export class AmlKycService {
       // Mock adverse media screening - 10% chance of findings
       const hasAdverseMedia = Math.random() < 0.1;
 
+      const matchSeverity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' = 'LOW';
       const matches = hasAdverseMedia
         ? [
             {
@@ -321,18 +322,14 @@ export class AmlKycService {
               date: '2023-06-15',
               summary:
                 'Settled civil lawsuit related to business practices. No criminal charges filed.',
-              severity: 'LOW' as const,
+              severity: matchSeverity,
               categories: ['Civil Litigation', 'Business Disputes'],
             },
           ]
         : [];
 
-      const riskLevel = hasAdverseMedia
-        ? matches[0].severity === 'HIGH'
-          ? 'HIGH'
-          : matches[0].severity === 'MEDIUM'
-          ? 'MEDIUM'
-          : 'LOW'
+      const riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' = hasAdverseMedia
+        ? matchSeverity
         : 'LOW';
 
       return {
@@ -577,7 +574,7 @@ export class AmlKycService {
             adverseMedia,
             riskAssessment,
             timestamp: new Date(),
-          },
+          } as any,
         },
       });
 

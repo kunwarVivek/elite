@@ -948,6 +948,276 @@ class SyndicateController {
       throw error;
     }
   }
+
+  /**
+   * Apply to join syndicate (for application-required syndicates)
+   * POST /api/syndicates/:id/apply
+   */
+  async applySyndicate(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        throw new AppError('User not authenticated', 401, 'NOT_AUTHENTICATED');
+      }
+
+      const { id } = req.params;
+
+      // Check if syndicate exists
+      const syndicate = await prisma.syndicate.findUnique({
+        where: { id },
+      });
+
+      if (!syndicate) {
+        throw new AppError('Syndicate not found', 404, 'SYNDICATE_NOT_FOUND');
+      }
+
+      // Check if already a member
+      const existingMember = await prisma.syndicateMember.findFirst({
+        where: {
+          syndicateId: id,
+          userId,
+        },
+      });
+
+      if (existingMember) {
+        throw new AppError('Already a member of this syndicate', 400, 'ALREADY_MEMBER');
+      }
+
+      // Create application record (in a real app, this would be a separate ApplicationRequest model)
+      // For now, just create the member with PENDING status
+      const application = await prisma.syndicateMember.create({
+        data: {
+          syndicateId: id,
+          userId,
+          role: 'MEMBER',
+          status: 'PENDING',
+          joinedAt: new Date(),
+        },
+      });
+
+      logger.info('Syndicate application submitted', { userId, syndicateId: id });
+
+      sendSuccess(res, {
+        applicationId: application.id,
+        status: 'PENDING',
+        message: 'Application submitted successfully',
+      }, 'Application submitted', 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Commit to syndicate investment
+   * POST /api/syndicates/:id/commit
+   */
+  async commitToSyndicate(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        throw new AppError('User not authenticated', 401, 'NOT_AUTHENTICATED');
+      }
+
+      const { id } = req.params;
+      const { amount } = req.body;
+
+      if (!amount || amount <= 0) {
+        throw new AppError('Valid commitment amount is required', 400, 'INVALID_AMOUNT');
+      }
+
+      // Get syndicate details
+      const syndicate = await prisma.syndicate.findUnique({
+        where: { id },
+      });
+
+      if (!syndicate) {
+        throw new AppError('Syndicate not found', 404, 'SYNDICATE_NOT_FOUND');
+      }
+
+      // Validate against minimum investment
+      if (amount < Number(syndicate.minimumInvestment)) {
+        throw new AppError(
+          `Minimum commitment is ${syndicate.minimumInvestment}`,
+          400,
+          'BELOW_MINIMUM'
+        );
+      }
+
+      // Calculate fees
+      const managementFee = Number(syndicate.managementFee || 0);
+      const setupFee = 500; // Could be configurable
+      const managementFeeAmount = (amount * managementFee) / 100;
+      const totalDue = amount + setupFee + managementFeeAmount;
+
+      // Create commitment record (in a real app, use a Commitment model)
+      // For now, store as JSON in syndicateMember
+      const member = await prisma.syndicateMember.upsert({
+        where: {
+          syndicateId_userId: {
+            syndicateId: id,
+            userId,
+          },
+        },
+        create: {
+          syndicateId: id,
+          userId,
+          role: 'MEMBER',
+          status: 'ACTIVE',
+          joinedAt: new Date(),
+          commitment: amount,
+        },
+        update: {
+          commitment: amount,
+        },
+      });
+
+      logger.info('Syndicate commitment created', { userId, syndicateId: id, amount });
+
+      sendSuccess(res, {
+        commitmentId: member.id,
+        amount,
+        setupFee,
+        managementFee: managementFeeAmount,
+        totalDue,
+      }, 'Commitment created successfully', 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get payment info for commitment
+   * GET /api/syndicates/commitments/:commitmentId/payment-info
+   */
+  async getCommitmentPaymentInfo(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        throw new AppError('User not authenticated', 401, 'NOT_AUTHENTICATED');
+      }
+
+      const { commitmentId } = req.params;
+
+      // Get commitment (syndicateMember)
+      const commitment = await prisma.syndicateMember.findUnique({
+        where: { id: commitmentId },
+        include: {
+          syndicate: true,
+          user: true,
+        },
+      });
+
+      if (!commitment) {
+        throw new AppError('Commitment not found', 404, 'COMMITMENT_NOT_FOUND');
+      }
+
+      if (commitment.userId !== userId) {
+        throw new AppError('Not authorized', 403, 'NOT_AUTHORIZED');
+      }
+
+      const amount = Number(commitment.commitment || 0);
+      const managementFee = Number(commitment.syndicate.managementFee || 0);
+      const setupFee = 500;
+      const managementFeeAmount = (amount * managementFee) / 100;
+      const totalDue = amount + setupFee + managementFeeAmount;
+
+      // Mock payment methods (in real app, fetch from payment service)
+      const paymentMethods = [
+        {
+          id: 'pm_bank_1',
+          type: 'BANK_ACCOUNT',
+          bankName: 'Chase Bank',
+          accountType: 'CHECKING',
+          last4: '1234',
+          isDefault: true,
+        },
+      ];
+
+      sendSuccess(res, {
+        commitment: {
+          id: commitment.id,
+          amount,
+          setupFee,
+          managementFee: managementFeeAmount,
+          totalDue,
+        },
+        syndicate: {
+          id: commitment.syndicate.id,
+          name: commitment.syndicate.name,
+          slug: commitment.syndicate.slug,
+        },
+        paymentMethods,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Process payment for commitment
+   * POST /api/syndicates/commitments/:commitmentId/pay
+   */
+  async processCommitmentPayment(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        throw new AppError('User not authenticated', 401, 'NOT_AUTHENTICATED');
+      }
+
+      const { commitmentId } = req.params;
+      const { paymentMethodId } = req.body;
+
+      if (!paymentMethodId) {
+        throw new AppError('Payment method is required', 400, 'MISSING_PAYMENT_METHOD');
+      }
+
+      // Get commitment
+      const commitment = await prisma.syndicateMember.findUnique({
+        where: { id: commitmentId },
+        include: {
+          syndicate: true,
+        },
+      });
+
+      if (!commitment) {
+        throw new AppError('Commitment not found', 404, 'COMMITMENT_NOT_FOUND');
+      }
+
+      if (commitment.userId !== userId) {
+        throw new AppError('Not authorized', 403, 'NOT_AUTHORIZED');
+      }
+
+      const amount = Number(commitment.commitment || 0);
+      const managementFee = Number(commitment.syndicate.managementFee || 0);
+      const setupFee = 500;
+      const managementFeeAmount = (amount * managementFee) / 100;
+      const totalDue = amount + setupFee + managementFeeAmount;
+
+      // In a real implementation:
+      // 1. Process payment via Stripe
+      // 2. Create Payment record in database
+      // 3. Update commitment status to PAID
+      // 4. Send confirmation email
+
+      // Mock payment processing
+      const paymentId = `pay_${Date.now()}`;
+
+      logger.info('Commitment payment processed', {
+        userId,
+        commitmentId,
+        amount: totalDue,
+        paymentMethodId,
+      });
+
+      sendSuccess(res, {
+        paymentId,
+        status: 'PROCESSING',
+        message: 'Payment initiated successfully',
+      }, 'Payment processed successfully', 201);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 // Export singleton instance

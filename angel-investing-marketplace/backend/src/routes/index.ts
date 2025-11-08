@@ -21,6 +21,9 @@ import adminApprovalRoutes from './admin-approval.routes.js';
 import companyUpdateRoutes from './company-update.routes.js';
 import marketplaceRoutes from './marketplace.routes.js';
 import socialRoutes from './social.routes.js';
+import spvRoutes from './spv.routes.js';
+import searchRoutes from './search.routes.js';
+import paymentMethodsRoutes from './payment-methods.routes.js';
 
 // Create main router
 const router = Router();
@@ -50,8 +53,10 @@ router.get('/', (req, res) => {
         startups: '/api/startups',
         investments: '/api/investments',
         payments: '/api/payments',
+        paymentMethods: '/api/payment-methods',
         portfolio: '/api/portfolio',
         syndicates: '/api/syndicates',
+        spvs: '/api/spvs',
         accreditation: '/api/accreditation',
         compliance: '/api/compliance',
         tax: '/api/tax',
@@ -60,6 +65,7 @@ router.get('/', (req, res) => {
         marketplace: '/api/marketplace',
         messages: '/api/messages',
         notifications: '/api/notifications',
+        search: '/api/search',
       },
     },
   });
@@ -75,8 +81,10 @@ router.use('/startups', apiVersion('v1'), startupRoutes);
 router.use('/pitches', apiVersion('v1'), pitchRoutes);
 router.use('/investments', apiVersion('v1'), investmentRoutes);
 router.use('/payments', apiVersion('v1'), paymentRoutes);
+router.use('/payment-methods', apiVersion('v1'), paymentMethodsRoutes);
 router.use('/portfolio', apiVersion('v1'), portfolioRoutes);
 router.use('/syndicates', apiVersion('v1'), syndicateRoutes);
+router.use('/spvs', apiVersion('v1'), spvRoutes);
 router.use('/accreditation', apiVersion('v1'), accreditationRoutes);
 router.use('/compliance', apiVersion('v1'), complianceRoutes);
 router.use('/tax', apiVersion('v1'), taxRoutes);
@@ -87,6 +95,7 @@ router.use('/social', apiVersion('v1'), socialRoutes);
 router.use('/messages', apiVersion('v1'), messageRoutes);
 router.use('/documents', apiVersion('v1'), documentRoutes);
 router.use('/notifications', apiVersion('v1'), notificationRoutes);
+router.use('/search', apiVersion('v1'), searchRoutes);
 
 // API documentation endpoint (placeholder)
 router.get('/docs', (req, res) => {
