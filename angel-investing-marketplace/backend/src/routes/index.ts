@@ -24,6 +24,9 @@ import socialRoutes from './social.routes.js';
 import spvRoutes from './spv.routes.js';
 import searchRoutes from './search.routes.js';
 import paymentMethodsRoutes from './payment-methods.routes.js';
+import safeRoutes from './safe.routes.js';
+import convertibleNoteRoutes from './convertible-note.routes.js';
+import capTableRoutes from './cap-table.routes.js';
 
 // Create main router
 const router = Router();
@@ -66,6 +69,9 @@ router.get('/', (req, res) => {
         messages: '/api/messages',
         notifications: '/api/notifications',
         search: '/api/search',
+        safes: '/api/safes',
+        convertibleNotes: '/api/notes',
+        capTables: '/api/cap-tables',
       },
     },
   });
@@ -96,6 +102,9 @@ router.use('/messages', apiVersion('v1'), messageRoutes);
 router.use('/documents', apiVersion('v1'), documentRoutes);
 router.use('/notifications', apiVersion('v1'), notificationRoutes);
 router.use('/search', apiVersion('v1'), searchRoutes);
+router.use('/safes', apiVersion('v1'), safeRoutes);
+router.use('/notes', apiVersion('v1'), convertibleNoteRoutes);
+router.use('/cap-tables', apiVersion('v1'), capTableRoutes);
 
 // API documentation endpoint (placeholder)
 router.get('/docs', (req, res) => {
