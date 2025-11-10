@@ -70,6 +70,9 @@ model User {
   // Equity round relations
   ledEquityRounds           EquityRound[]
   capTableStakeholders      CapTableStakeholder[]
+  // Subscription relations
+  subscriptions             Subscription[]
+  paymentMethods            PaymentMethod[]
 
   // Indexes
   @@index([email])
@@ -1128,6 +1131,142 @@ model Verification {
   @@index([token])
   @@index([expires])
   @@map("verifications")
+}
+
+// ============================================================================
+// SUBSCRIPTION & PRICING MANAGEMENT
+// ============================================================================
+
+model SubscriptionPlan {
+  id                String             @id @default(cuid())
+  name              String
+  slug              String             @unique
+  tier              PlanTier
+  price             Decimal            @db.Decimal(10, 2)
+  billingInterval   BillingInterval
+  features          Json // Feature flags and limits
+  limits            Json // Usage limits (investments, documents, etc.)
+  isActive          Boolean            @default(true)
+  trialDays         Int                @default(14)
+  stripePriceId     String?            @unique
+  stripeProductId   String?            @unique
+  displayOrder      Int                @default(0)
+  description       String?            @db.Text
+  highlightedText   String? // "Most Popular", "Best Value", etc.
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  subscriptions Subscription[]
+
+  @@index([tier])
+  @@index([isActive])
+  @@index([billingInterval])
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id                    String              @id @default(cuid())
+  userId                String
+  planId                String
+  status                SubscriptionStatus
+  currentPeriodStart    DateTime
+  currentPeriodEnd      DateTime
+  cancelAtPeriodEnd     Boolean             @default(false)
+  canceledAt            DateTime?
+  cancelReason          String?
+  stripeSubscriptionId  String?             @unique
+  stripeCustomerId      String?
+  stripePaymentMethodId String?
+  trialStart            DateTime?
+  trialEnd              DateTime?
+  metadata              Json?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan     SubscriptionPlan   @relation(fields: [planId], references: [id])
+  invoices Invoice[]
+  usage    SubscriptionUsage?
+
+  @@index([userId])
+  @@index([planId])
+  @@index([status])
+  @@index([currentPeriodEnd])
+  @@index([stripeSubscriptionId])
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id                 String        @id @default(cuid())
+  subscriptionId     String
+  amount             Decimal       @db.Decimal(10, 2)
+  tax                Decimal?      @db.Decimal(10, 2)
+  total              Decimal       @db.Decimal(10, 2)
+  currency           String        @default("USD")
+  status             InvoiceStatus
+  stripeInvoiceId    String?       @unique
+  invoiceNumber      String?       @unique
+  invoiceUrl         String?
+  invoicePdf         String?
+  periodStart        DateTime
+  periodEnd          DateTime
+  dueDate            DateTime?
+  paidAt             DateTime?
+  attemptCount       Int           @default(0)
+  nextPaymentAttempt DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([stripeInvoiceId])
+  @@map("invoices")
+}
+
+model SubscriptionUsage {
+  id                   String   @id @default(cuid())
+  subscriptionId       String   @unique
+  investmentsCreated   Int      @default(0)
+  investmentsLimit     Int      @default(5)
+  documentsUploaded    Int      @default(0)
+  documentsLimit       Int      @default(100)
+  storageUsedMB        Float    @default(0)
+  storageLimitMB       Float    @default(100)
+  apiCallsCount        Int      @default(0)
+  apiCallsLimit        Int      @default(1000)
+  resetDate            DateTime
+  lastResetAt          DateTime
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@index([resetDate])
+  @@map("subscription_usage")
+}
+
+model PaymentMethod {
+  id                  String   @id @default(cuid())
+  userId              String
+  type                String // card, bank_account, etc.
+  stripePaymentMethod String   @unique
+  brand               String? // visa, mastercard, etc.
+  last4               String?
+  expiryMonth         Int?
+  expiryYear          Int?
+  isDefault           Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([stripePaymentMethod])
+  @@map("payment_methods")
 }
 
 // ============================================================================
@@ -2372,6 +2511,40 @@ enum PaymentStatus {
   SENT
   RECEIVED
   FAILED
+}
+
+// ============================================================================
+// SUBSCRIPTION & PRICING ENUMS
+// ============================================================================
+
+enum PlanTier {
+  FREE
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum BillingInterval {
+  MONTHLY
+  ANNUAL
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  OPEN
+  PAID
+  VOID
+  UNCOLLECTIBLE
 }
 
 // ============================================================================
