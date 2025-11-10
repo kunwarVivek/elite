@@ -29,6 +29,8 @@ import convertibleNoteRoutes from './convertible-note.routes.js';
 import capTableRoutes from './cap-table.routes.js';
 import equityRoundRoutes from './equity-round.routes.js';
 import termSheetRoutes from './term-sheet.routes.js';
+import investorRightsRoutes from './investor-rights.routes.js';
+import exitManagementRoutes from './exit-management.routes.js';
 
 // Create main router
 const router = Router();
@@ -76,6 +78,8 @@ router.get('/', (req, res) => {
         capTables: '/api/cap-tables',
         equityRounds: '/api/equity-rounds',
         termSheets: '/api/term-sheets',
+        investorRights: '/api/investor-rights',
+        exitEvents: '/api/exit-events',
       },
     },
   });
@@ -111,6 +115,8 @@ router.use('/notes', apiVersion('v1'), convertibleNoteRoutes);
 router.use('/cap-tables', apiVersion('v1'), capTableRoutes);
 router.use('/equity-rounds', apiVersion('v1'), equityRoundRoutes);
 router.use('/term-sheets', apiVersion('v1'), termSheetRoutes);
+router.use('/investor-rights', apiVersion('v1'), investorRightsRoutes);
+router.use('/exit-events', apiVersion('v1'), exitManagementRoutes);
 
 // API documentation endpoint (placeholder)
 router.get('/docs', (req, res) => {
