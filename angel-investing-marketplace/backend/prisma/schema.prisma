@@ -15,20 +15,20 @@ datasource db {
 // ============================================================================
 
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
+  id            String    @id @default(cuid())
+  email         String    @unique
   name          String?
   password      String?
-  emailVerified Boolean  @default(false)
+  emailVerified Boolean   @default(false)
   image         String?
-  role          UserRole @default(INVESTOR)
+  role          UserRole  @default(INVESTOR)
   avatarUrl     String?
   profileData   Json?
-  isVerified    Boolean  @default(false)
-  isActive      Boolean  @default(true)
+  isVerified    Boolean   @default(false)
+  isActive      Boolean   @default(true)
   approvedAt    DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   // Relations
   foundedStartups           Startup[]             @relation("StartupFounder")
@@ -59,14 +59,17 @@ model User {
   // Auth relations
   accounts                  Account[]
   // Admin approval relations
-  requestedApprovals        AdminApproval[]      @relation("ApprovalRequester")
-  assignedApprovals         AdminApproval[]      @relation("ApprovalAssignee")
-  reviewedApprovals         AdminApproval[]      @relation("ApprovalReviewer")
+  requestedApprovals        AdminApproval[]       @relation("ApprovalRequester")
+  assignedApprovals         AdminApproval[]       @relation("ApprovalAssignee")
+  reviewedApprovals         AdminApproval[]       @relation("ApprovalReviewer")
   // Company update relations
-  authoredUpdates           CompanyUpdate[]      @relation("UpdateAuthor")
-  updateEngagements         UpdateEngagement[]   @relation("UpdateEngagements")
-  updateReactions           UpdateReaction[]     @relation("UpdateReactions")
-  updateComments            UpdateComment[]      @relation("UpdateComments")
+  authoredUpdates           CompanyUpdate[]       @relation("UpdateAuthor")
+  updateEngagements         UpdateEngagement[]    @relation("UpdateEngagements")
+  updateReactions           UpdateReaction[]      @relation("UpdateReactions")
+  updateComments            UpdateComment[]       @relation("UpdateComments")
+  // Equity round relations
+  ledEquityRounds           EquityRound[]
+  capTableStakeholders      CapTableStakeholder[]
 
   // Indexes
   @@index([email])
@@ -133,6 +136,10 @@ model Startup {
   pitches        Pitch[]
   documents      Document[]
   companyUpdates CompanyUpdate[]
+  equityRounds   EquityRound[]
+  capTables      CapTable[]
+  boardMeetings  BoardMeeting[]
+  exitEvents     ExitEvent[]
 
   // Indexes
   @@index([founderId])
@@ -230,6 +237,10 @@ model Investment {
   shareCertificates ShareCertificate[]
   // Compliance relations
   secRegulationD    SECRegulationD?
+  // Investment instrument relations
+  safeAgreement     SafeAgreement?
+  convertibleNote   ConvertibleNote?
+  investorRights    InvestorRights?
 
   // Indexes
   @@index([investorId])
@@ -376,36 +387,36 @@ model Comment {
 // ============================================================================
 
 model CompanyUpdate {
-  id              String             @id @default(cuid())
+  id              String          @id @default(cuid())
   startupId       String
   authorId        String
   title           String
-  slug            String             @unique
-  content         String             @db.Text
+  slug            String          @unique
+  content         String          @db.Text
   excerpt         String?
   updateType      UpdateType
   category        UpdateCategory?
-  tags            String[]           @default([])
+  tags            String[]        @default([])
   coverImageUrl   String?
-  attachments     Json?              @default("[]")
-  metadata        Json?              @default("{}")
-  status          UpdateStatus       @default(DRAFT)
+  attachments     Json?           @default("[]")
+  metadata        Json?           @default("{}")
+  status          UpdateStatus    @default(DRAFT)
   publishedAt     DateTime?
   scheduledFor    DateTime?
-  viewCount       Int                @default(0)
-  reactionCount   Int                @default(0)
-  commentCount    Int                @default(0)
-  isHighlighted   Boolean            @default(false)
-  isPinned        Boolean            @default(false)
-  notifyInvestors Boolean            @default(true)
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  viewCount       Int             @default(0)
+  reactionCount   Int             @default(0)
+  commentCount    Int             @default(0)
+  isHighlighted   Boolean         @default(false)
+  isPinned        Boolean         @default(false)
+  notifyInvestors Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
-  startup      Startup             @relation(fields: [startupId], references: [id], onDelete: Cascade)
-  author       User                @relation("UpdateAuthor", fields: [authorId], references: [id])
-  engagements  UpdateEngagement[]
-  comments     UpdateComment[]
-  reactions    UpdateReaction[]
+  startup     Startup            @relation(fields: [startupId], references: [id], onDelete: Cascade)
+  author      User               @relation("UpdateAuthor", fields: [authorId], references: [id])
+  engagements UpdateEngagement[]
+  comments    UpdateComment[]
+  reactions   UpdateReaction[]
 
   // Indexes
   @@index([startupId])
@@ -422,13 +433,13 @@ model CompanyUpdate {
 }
 
 model UpdateEngagement {
-  id        String   @id @default(cuid())
-  updateId  String
-  userId    String
-  viewedAt  DateTime @default(now())
-  timeSpent Int?     // seconds
+  id          String   @id @default(cuid())
+  updateId    String
+  userId      String
+  viewedAt    DateTime @default(now())
+  timeSpent   Int? // seconds
   scrollDepth Float? // percentage
-  createdAt DateTime @default(now())
+  createdAt   DateTime @default(now())
 
   update CompanyUpdate @relation(fields: [updateId], references: [id], onDelete: Cascade)
   user   User          @relation("UpdateEngagements", fields: [userId], references: [id], onDelete: Cascade)
@@ -470,9 +481,9 @@ model UpdateComment {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  update        CompanyUpdate  @relation(fields: [updateId], references: [id], onDelete: Cascade)
-  user          User           @relation("UpdateComments", fields: [userId], references: [id])
-  parentComment UpdateComment? @relation("UpdateCommentReplies", fields: [parentCommentId], references: [id])
+  update        CompanyUpdate   @relation(fields: [updateId], references: [id], onDelete: Cascade)
+  user          User            @relation("UpdateComments", fields: [userId], references: [id])
+  parentComment UpdateComment?  @relation("UpdateCommentReplies", fields: [parentCommentId], references: [id])
   replies       UpdateComment[] @relation("UpdateCommentReplies")
 
   // Indexes
@@ -1198,28 +1209,28 @@ model Alert {
 // ============================================================================
 
 model AdminApproval {
-  id           String            @id @default(cuid())
-  entityType   ApprovalEntityType
-  entityId     String
-  requestedBy  String
-  assignedTo   String?
-  reviewedBy   String?
-  status       ApprovalStatus    @default(PENDING)
-  priority     ApprovalPriority  @default(MEDIUM)
-  reason       String?           @db.Text
-  reviewNotes  String?           @db.Text
-  tags         String[]          @default([])
-  metadata     Json              @default("{}")
-  slaDeadline  DateTime
-  reviewedAt   DateTime?
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  id          String             @id @default(cuid())
+  entityType  ApprovalEntityType
+  entityId    String
+  requestedBy String
+  assignedTo  String?
+  reviewedBy  String?
+  status      ApprovalStatus     @default(PENDING)
+  priority    ApprovalPriority   @default(MEDIUM)
+  reason      String?            @db.Text
+  reviewNotes String?            @db.Text
+  tags        String[]           @default([])
+  metadata    Json               @default("{}")
+  slaDeadline DateTime
+  reviewedAt  DateTime?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
 
   // Relations
-  requester    User              @relation("ApprovalRequester", fields: [requestedBy], references: [id], onDelete: Cascade)
-  assignee     User?             @relation("ApprovalAssignee", fields: [assignedTo], references: [id], onDelete: SetNull)
-  reviewer     User?             @relation("ApprovalReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
-  auditLogs    ApprovalAuditLog[]
+  requester User               @relation("ApprovalRequester", fields: [requestedBy], references: [id], onDelete: Cascade)
+  assignee  User?              @relation("ApprovalAssignee", fields: [assignedTo], references: [id], onDelete: SetNull)
+  reviewer  User?              @relation("ApprovalReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
+  auditLogs ApprovalAuditLog[]
 
   // Indexes
   @@index([entityType])
@@ -1246,7 +1257,7 @@ model ApprovalAuditLog {
   createdAt   DateTime @default(now())
 
   // Relations
-  approval    AdminApproval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+  approval AdminApproval @relation(fields: [approvalId], references: [id], onDelete: Cascade)
 
   // Indexes
   @@index([approvalId])
@@ -1589,6 +1600,778 @@ enum AnalyticsSnapshotType {
   SPV_ANALYTICS
   COMPLIANCE_ANALYTICS
   PLATFORM_OVERVIEW
+}
+
+// ============================================================================
+// INVESTMENT INSTRUMENTS
+// ============================================================================
+
+// SAFE (Simple Agreement for Future Equity)
+model SafeAgreement {
+  id                 String     @id @default(cuid())
+  investmentId       String     @unique
+  type               SafeType
+  investmentAmount   Decimal    @db.Decimal(15, 2)
+  valuationCap       Decimal?   @db.Decimal(15, 2)
+  discountRate       Decimal?   @db.Decimal(5, 2)
+  proRataRight       Boolean    @default(false)
+  mfnProvision       Boolean    @default(false) // Most Favored Nation
+  conversionTriggers Json? // Equity financing, liquidity, dissolution
+  conversionPrice    Decimal?   @db.Decimal(15, 2)
+  conversionDate     DateTime?
+  status             SafeStatus @default(ACTIVE)
+  documentUrl        String?
+  issueDate          DateTime   @default(now())
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  investment Investment @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+
+  @@index([investmentId])
+  @@index([status])
+  @@index([type])
+  @@index([issueDate])
+  @@map("safe_agreements")
+}
+
+// Convertible Note
+model ConvertibleNote {
+  id                          String          @id @default(cuid())
+  investmentId                String          @unique
+  principalAmount             Decimal         @db.Decimal(15, 2)
+  interestRate                Decimal         @db.Decimal(5, 2) // Annual rate
+  maturityDate                DateTime
+  discountRate                Decimal?        @db.Decimal(5, 2)
+  valuationCap                Decimal?        @db.Decimal(15, 2)
+  conversionPrice             Decimal?        @db.Decimal(15, 2)
+  autoConversion              Boolean         @default(true)
+  qualifiedFinancingThreshold Decimal?        @db.Decimal(15, 2)
+  securityType                String          @default("Preferred")
+  compounding                 CompoundingType @default(SIMPLE)
+  status                      NoteStatus      @default(ACTIVE)
+  accrualSchedule             Json?
+  accruedInterest             Decimal         @default(0) @db.Decimal(15, 2)
+  lastAccrualDate             DateTime?
+  documentUrl                 String?
+  issueDate                   DateTime        @default(now())
+  createdAt                   DateTime        @default(now())
+  updatedAt                   DateTime        @updatedAt
+
+  investment Investment @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+
+  @@index([investmentId])
+  @@index([status])
+  @@index([maturityDate])
+  @@index([issueDate])
+  @@map("convertible_notes")
+}
+
+// Priced Equity Round
+model EquityRound {
+  id                    String            @id @default(cuid())
+  startupId             String
+  roundName             String
+  roundType             RoundType
+  pricePerShare         Decimal           @db.Decimal(15, 2)
+  preMoneyValuation     Decimal           @db.Decimal(15, 2)
+  postMoneyValuation    Decimal           @db.Decimal(15, 2)
+  targetAmount          Decimal           @db.Decimal(15, 2)
+  minimumRaise          Decimal?          @db.Decimal(15, 2)
+  maximumRaise          Decimal?          @db.Decimal(15, 2)
+  leadInvestorId        String?
+  closingDate           DateTime?
+  shareClass            String
+  liquidationPreference Decimal           @default(1) @db.Decimal(5, 2)
+  participationRight    Boolean           @default(false)
+  dividendRate          Decimal?          @db.Decimal(5, 2)
+  antiDilution          AntiDilutionType?
+  votingRights          Json?
+  boardSeats            Int?
+  proRataRights         Boolean           @default(true)
+  status                RoundStatus       @default(PLANNING)
+  documentUrl           String?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  startup      Startup     @relation(fields: [startupId], references: [id], onDelete: Cascade)
+  leadInvestor User?       @relation(fields: [leadInvestorId], references: [id])
+  termSheets   TermSheet[]
+
+  @@index([startupId])
+  @@index([leadInvestorId])
+  @@index([status])
+  @@index([roundType])
+  @@index([closingDate])
+  @@map("equity_rounds")
+}
+
+// ============================================================================
+// CAP TABLE MANAGEMENT
+// ============================================================================
+
+model CapTable {
+  id                 String   @id @default(cuid())
+  startupId          String
+  asOfDate           DateTime
+  version            Int      @default(1)
+  fullyDilutedShares Decimal  @db.Decimal(15, 2)
+  totalCommon        Decimal  @db.Decimal(15, 2)
+  totalPreferred     Decimal  @db.Decimal(15, 2)
+  totalOptions       Decimal  @db.Decimal(15, 2)
+  optionPool         Decimal  @db.Decimal(15, 2)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  startup      Startup               @relation(fields: [startupId], references: [id], onDelete: Cascade)
+  shareClasses ShareClass[]
+  stakeholders CapTableStakeholder[]
+  events       CapTableEvent[]
+
+  @@index([startupId])
+  @@index([asOfDate])
+  @@index([version])
+  @@map("cap_tables")
+}
+
+model ShareClass {
+  id                    String            @id @default(cuid())
+  capTableId            String
+  name                  String
+  type                  ShareClassType
+  sharesAuthorized      Decimal           @db.Decimal(15, 2)
+  sharesIssued          Decimal           @db.Decimal(15, 2)
+  sharesOutstanding     Decimal           @db.Decimal(15, 2)
+  pricePerShare         Decimal?          @db.Decimal(15, 2)
+  liquidationPreference Decimal           @default(0) @db.Decimal(15, 2)
+  liquidationMultiple   Decimal           @default(1) @db.Decimal(5, 2)
+  participating         Boolean           @default(false)
+  seniorityRank         Int
+  conversionRatio       Decimal?          @db.Decimal(10, 4)
+  antiDilution          AntiDilutionType?
+  votesPerShare         Decimal           @default(1) @db.Decimal(10, 2)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  capTable CapTable @relation(fields: [capTableId], references: [id], onDelete: Cascade)
+
+  @@index([capTableId])
+  @@index([type])
+  @@map("share_classes")
+}
+
+model CapTableStakeholder {
+  id                    String          @id @default(cuid())
+  capTableId            String
+  stakeholderType       StakeholderType
+  userId                String?
+  entityName            String
+  commonShares          Decimal         @default(0) @db.Decimal(15, 2)
+  preferredShares       Json? // { "Series A": 1000, "Series B": 500 }
+  options               Decimal         @default(0) @db.Decimal(15, 2)
+  warrants              Decimal         @default(0) @db.Decimal(15, 2)
+  fullyDilutedOwnership Decimal         @db.Decimal(5, 4)
+  currentOwnership      Decimal         @db.Decimal(5, 4)
+  vestingSchedule       Json?
+  vestedShares          Decimal?        @db.Decimal(15, 2)
+  unvestedShares        Decimal?        @db.Decimal(15, 2)
+  boardSeat             Boolean         @default(false)
+  observer              Boolean         @default(false)
+  proRataRights         Boolean         @default(false)
+  acquisitionDate       DateTime?
+  acquisitionPrice      Decimal?        @db.Decimal(15, 2)
+  acquisitionRoundId    String?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  capTable CapTable @relation(fields: [capTableId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id])
+
+  @@index([capTableId])
+  @@index([userId])
+  @@index([stakeholderType])
+  @@map("cap_table_stakeholders")
+}
+
+model CapTableEvent {
+  id            String            @id @default(cuid())
+  capTableId    String
+  eventDate     DateTime
+  eventType     CapTableEventType
+  description   String
+  sharesBefore  Json
+  sharesAfter   Json
+  roundId       String?
+  transactionId String?
+  createdAt     DateTime          @default(now())
+
+  capTable CapTable @relation(fields: [capTableId], references: [id], onDelete: Cascade)
+
+  @@index([capTableId])
+  @@index([eventDate])
+  @@index([eventType])
+  @@map("cap_table_events")
+}
+
+// ============================================================================
+// TERM SHEET MANAGEMENT
+// ============================================================================
+
+model TermSheet {
+  id                   String            @id @default(cuid())
+  roundId              String
+  version              Int               @default(1)
+  status               TermSheetStatus   @default(DRAFT)
+  expirationDate       DateTime?
+  investmentAmount     Decimal           @db.Decimal(15, 2)
+  valuation            Decimal           @db.Decimal(15, 2)
+  securityType         String
+  liquidationPref      Decimal           @db.Decimal(5, 2)
+  participationRight   Boolean
+  dividendRate         Decimal?          @db.Decimal(5, 2)
+  antiDilution         AntiDilutionType?
+  boardSeats           Int?
+  boardObservers       Int?
+  protectiveProvisions Json?
+  votingRights         Json?
+  informationRights    Json?
+  proRataRights        Boolean           @default(true)
+  redemptionRights     Boolean           @default(false)
+  dragAlongRights      Boolean           @default(true)
+  tagAlongRights       Boolean           @default(true)
+  rightOfFirstRefusal  Boolean           @default(true)
+  coSaleRights         Boolean           @default(true)
+  redemptionPrice      Decimal?          @db.Decimal(15, 2)
+  redemptionPeriod     String?
+  noShopPeriod         Int? // Days
+  exclusivity          Boolean           @default(false)
+  breakupFee           Decimal?          @db.Decimal(15, 2)
+  documentUrl          String?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  round        EquityRound            @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  negotiations TermSheetNegotiation[]
+  signatures   TermSheetSignature[]
+  comments     TermSheetComment[]
+
+  @@index([roundId])
+  @@index([status])
+  @@index([version])
+  @@index([expirationDate])
+  @@map("term_sheets")
+}
+
+model TermSheetNegotiation {
+  id          String   @id @default(cuid())
+  termSheetId String
+  userId      String
+  changeType  String
+  fieldName   String
+  oldValue    Json?
+  newValue    Json?
+  reason      String?
+  status      String   @default("PROPOSED")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  termSheet TermSheet @relation(fields: [termSheetId], references: [id], onDelete: Cascade)
+
+  @@index([termSheetId])
+  @@index([userId])
+  @@index([status])
+  @@map("term_sheet_negotiations")
+}
+
+model TermSheetSignature {
+  id              String          @id @default(cuid())
+  termSheetId     String
+  signerId        String
+  signerRole      String
+  sentAt          DateTime?
+  signedAt        DateTime?
+  ipAddress       String?
+  signatureMethod String?
+  signatureData   String?
+  status          SignatureStatus @default(PENDING)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  termSheet TermSheet @relation(fields: [termSheetId], references: [id], onDelete: Cascade)
+
+  @@index([termSheetId])
+  @@index([signerId])
+  @@index([status])
+  @@map("term_sheet_signatures")
+}
+
+model TermSheetComment {
+  id          String   @id @default(cuid())
+  termSheetId String
+  userId      String
+  content     String   @db.Text
+  section     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  termSheet TermSheet @relation(fields: [termSheetId], references: [id], onDelete: Cascade)
+
+  @@index([termSheetId])
+  @@index([userId])
+  @@map("term_sheet_comments")
+}
+
+// ============================================================================
+// DOCUMENT AUTOMATION
+// ============================================================================
+
+model DocumentTemplate {
+  id             String                   @id @default(cuid())
+  name           String
+  category       DocumentTemplateCategory
+  jurisdictions  String[]
+  version        String
+  templateUrl    String
+  variableFields Json
+  lawyerReviewed Boolean                  @default(false)
+  reviewDate     DateTime?
+  isActive       Boolean                  @default(true)
+  useCount       Int                      @default(0)
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  generations DocumentGeneration[]
+
+  @@index([category])
+  @@index([isActive])
+  @@map("document_templates")
+}
+
+model DocumentGeneration {
+  id           String                   @id @default(cuid())
+  templateId   String
+  investmentId String?
+  roundId      String?
+  mergeData    Json
+  documentUrl  String
+  generatedAt  DateTime                 @default(now())
+  status       DocumentGenerationStatus @default(DRAFT)
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  template   DocumentTemplate    @relation(fields: [templateId], references: [id])
+  signatures DocumentSignature[]
+
+  @@index([templateId])
+  @@index([investmentId])
+  @@index([roundId])
+  @@index([status])
+  @@map("document_generations")
+}
+
+model DocumentSignature {
+  id              String          @id @default(cuid())
+  documentId      String
+  signerId        String
+  signerRole      String
+  sentAt          DateTime?
+  signedAt        DateTime?
+  ipAddress       String?
+  signatureMethod String?
+  signatureData   String?
+  status          SignatureStatus @default(PENDING)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  document DocumentGeneration @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([signerId])
+  @@index([status])
+  @@map("document_signatures")
+}
+
+// ============================================================================
+// INVESTOR RIGHTS & GOVERNANCE
+// ============================================================================
+
+model InvestorRights {
+  id                     String            @id @default(cuid())
+  investmentId           String            @unique
+  userId                 String
+  boardSeat              Boolean           @default(false)
+  boardObserver          Boolean           @default(false)
+  monthlyFinancials      Boolean           @default(false)
+  quarterlyFinancials    Boolean           @default(true)
+  annualFinancials       Boolean           @default(true)
+  annualBudget           Boolean           @default(false)
+  investorUpdates        Boolean           @default(true)
+  protectiveProvisions   Json?
+  proRataRight           Boolean           @default(false)
+  majorInvestorRight     Boolean           @default(false)
+  superProRata           Decimal?          @db.Decimal(5, 2)
+  rightOfFirstRefusal    Boolean           @default(false)
+  coSaleRight            Boolean           @default(false)
+  dragAlongRight         Boolean           @default(false)
+  redemptionRight        Boolean           @default(false)
+  redemptionDate         DateTime?
+  antiDilutionProtection AntiDilutionType?
+  demandRights           Int?
+  piggybackRights        Boolean           @default(false)
+  s3Rights               Boolean           @default(false)
+  mostFavoredNation      Boolean           @default(false)
+  noShopWaiver           Boolean           @default(false)
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+
+  investment Investment @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+
+  @@index([investmentId])
+  @@index([userId])
+  @@index([boardSeat])
+  @@index([proRataRight])
+  @@map("investor_rights")
+}
+
+model BoardMeeting {
+  id           String           @id @default(cuid())
+  startupId    String
+  meetingDate  DateTime
+  meetingType  BoardMeetingType
+  location     String?
+  directors    Json
+  observers    Json
+  management   Json
+  agenda       String?
+  materials    String[]
+  minutesUrl   String?
+  recordingUrl String?
+  status       MeetingStatus    @default(SCHEDULED)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  startup     Startup           @relation(fields: [startupId], references: [id], onDelete: Cascade)
+  resolutions BoardResolution[]
+
+  @@index([startupId])
+  @@index([meetingDate])
+  @@index([status])
+  @@map("board_meetings")
+}
+
+model BoardResolution {
+  id                    String            @id @default(cuid())
+  meetingId             String
+  resolutionNumber      String
+  title                 String
+  description           String            @db.Text
+  proposedBy            String
+  requiresMajority      Boolean           @default(true)
+  requiresSupermajority Boolean           @default(false)
+  requiredVotes         Int?
+  result                ResolutionResult?
+  passedDate            DateTime?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  meeting BoardMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  votes   BoardVote[]
+
+  @@index([meetingId])
+  @@index([result])
+  @@map("board_resolutions")
+}
+
+model BoardVote {
+  id           String   @id @default(cuid())
+  resolutionId String
+  voterId      String
+  vote         VoteType
+  votedAt      DateTime @default(now())
+  comments     String?
+
+  resolution BoardResolution @relation(fields: [resolutionId], references: [id], onDelete: Cascade)
+
+  @@index([resolutionId])
+  @@index([voterId])
+  @@map("board_votes")
+}
+
+// ============================================================================
+// FOLLOW-ON INVESTMENT & EXIT MANAGEMENT
+// ============================================================================
+
+model FollowOnInvestment {
+  id                   String         @id @default(cuid())
+  originalInvestmentId String
+  investorId           String
+  startupId            String
+  roundId              String?
+  proRataRight         Boolean
+  entitlement          Decimal        @db.Decimal(15, 2)
+  allocationUsed       Decimal        @default(0) @db.Decimal(15, 2)
+  allocationRemaining  Decimal        @db.Decimal(15, 2)
+  notificationDate     DateTime
+  deadlineDate         DateTime
+  exercisedDate        DateTime?
+  exercised            Boolean        @default(false)
+  declined             Boolean        @default(false)
+  status               FollowOnStatus @default(OFFERED)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  @@index([originalInvestmentId])
+  @@index([investorId])
+  @@index([startupId])
+  @@index([roundId])
+  @@index([status])
+  @@index([deadlineDate])
+  @@map("follow_on_investments")
+}
+
+model ExitEvent {
+  id               String     @id @default(cuid())
+  startupId        String
+  exitType         ExitType
+  announcementDate DateTime
+  closingDate      DateTime?
+  totalProceeds    Decimal    @db.Decimal(15, 2)
+  cashPortion      Decimal    @db.Decimal(15, 2)
+  stockPortion     Decimal    @default(0) @db.Decimal(15, 2)
+  earnoutPortion   Decimal?   @db.Decimal(15, 2)
+  acquirerName     String?
+  acquirerTicker   String?
+  status           ExitStatus @default(ANNOUNCED)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  startup       Startup            @relation(fields: [startupId], references: [id], onDelete: Cascade)
+  waterfall     ExitWaterfall?
+  distributions ExitDistribution[]
+
+  @@index([startupId])
+  @@index([exitType])
+  @@index([status])
+  @@index([announcementDate])
+  @@index([closingDate])
+  @@map("exit_events")
+}
+
+model ExitWaterfall {
+  id            String   @id @default(cuid())
+  exitEventId   String   @unique
+  totalProceeds Decimal  @db.Decimal(15, 2)
+  layers        Json
+  distributions Json
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  exitEvent ExitEvent @relation(fields: [exitEventId], references: [id], onDelete: Cascade)
+
+  @@index([exitEventId])
+  @@map("exit_waterfalls")
+}
+
+model ExitDistribution {
+  id              String        @id @default(cuid())
+  exitEventId     String
+  stakeholderId   String
+  cashAmount      Decimal       @db.Decimal(15, 2)
+  stockAmount     Decimal?      @db.Decimal(15, 2)
+  earnoutAmount   Decimal?      @db.Decimal(15, 2)
+  liquidationPref Decimal       @db.Decimal(15, 2)
+  proRataShare    Decimal       @db.Decimal(5, 4)
+  totalReturn     Decimal       @db.Decimal(15, 2)
+  returnMultiple  Decimal       @db.Decimal(5, 2)
+  paymentDate     DateTime?
+  paymentStatus   PaymentStatus @default(PENDING)
+  taxWithholding  Decimal?      @db.Decimal(15, 2)
+  taxForms        String[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  exitEvent ExitEvent @relation(fields: [exitEventId], references: [id], onDelete: Cascade)
+
+  @@index([exitEventId])
+  @@index([stakeholderId])
+  @@index([paymentStatus])
+  @@map("exit_distributions")
+}
+
+// ============================================================================
+// NEW ENUMS
+// ============================================================================
+
+enum SafeType {
+  POST_MONEY
+  PRE_MONEY
+}
+
+enum SafeStatus {
+  ACTIVE
+  CONVERTED
+  DISSOLVED
+  CANCELLED
+}
+
+enum CompoundingType {
+  SIMPLE
+  COMPOUND
+}
+
+enum NoteStatus {
+  ACTIVE
+  CONVERTED
+  MATURED
+  REPAID
+  DEFAULTED
+  CANCELLED
+}
+
+enum RoundType {
+  SEED
+  SERIES_A
+  SERIES_B
+  SERIES_C
+  SERIES_D
+  SERIES_E
+  BRIDGE
+  EXTENSION
+}
+
+enum RoundStatus {
+  PLANNING
+  OPEN
+  CLOSING
+  CLOSED
+  CANCELLED
+}
+
+enum AntiDilutionType {
+  WEIGHTED_AVERAGE
+  FULL_RATCHET
+  NONE
+}
+
+enum ShareClassType {
+  COMMON
+  PREFERRED
+  OPTION
+  WARRANT
+}
+
+enum StakeholderType {
+  FOUNDER
+  EMPLOYEE
+  INVESTOR
+  ADVISOR
+  CONSULTANT
+}
+
+enum CapTableEventType {
+  FUNDING
+  CONVERSION
+  OPTION_GRANT
+  OPTION_EXERCISE
+  TRANSFER
+  REPURCHASE
+  CANCELLATION
+}
+
+enum TermSheetStatus {
+  DRAFT
+  SENT
+  NEGOTIATING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum SignatureStatus {
+  PENDING
+  SIGNED
+  DECLINED
+  EXPIRED
+}
+
+enum DocumentTemplateCategory {
+  SAFE
+  CONVERTIBLE_NOTE
+  TERM_SHEET
+  STOCK_PURCHASE_AGREEMENT
+  SUBSCRIPTION_AGREEMENT
+  SHAREHOLDERS_AGREEMENT
+  VOTING_AGREEMENT
+  RIGHT_OF_FIRST_REFUSAL
+  CO_SALE_AGREEMENT
+  INVESTOR_RIGHTS_AGREEMENT
+  NDA
+  OTHER
+}
+
+enum DocumentGenerationStatus {
+  DRAFT
+  SENT_FOR_SIGNATURE
+  PARTIALLY_SIGNED
+  FULLY_EXECUTED
+  CANCELLED
+}
+
+enum BoardMeetingType {
+  REGULAR
+  SPECIAL
+  ANNUAL
+  EMERGENCY
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ResolutionResult {
+  PASSED
+  FAILED
+  ABSTAINED
+  TABLED
+}
+
+enum VoteType {
+  FOR
+  AGAINST
+  ABSTAIN
+}
+
+enum FollowOnStatus {
+  OFFERED
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  EXERCISED
+}
+
+enum ExitType {
+  ACQUISITION
+  IPO
+  MERGER
+  LIQUIDATION
+  SECONDARY_SALE
+}
+
+enum ExitStatus {
+  ANNOUNCED
+  PENDING
+  CLOSED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SENT
+  RECEIVED
+  FAILED
 }
 
 // ============================================================================
