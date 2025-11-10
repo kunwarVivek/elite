@@ -27,6 +27,8 @@ import paymentMethodsRoutes from './payment-methods.routes.js';
 import safeRoutes from './safe.routes.js';
 import convertibleNoteRoutes from './convertible-note.routes.js';
 import capTableRoutes from './cap-table.routes.js';
+import equityRoundRoutes from './equity-round.routes.js';
+import termSheetRoutes from './term-sheet.routes.js';
 
 // Create main router
 const router = Router();
@@ -72,6 +74,8 @@ router.get('/', (req, res) => {
         safes: '/api/safes',
         convertibleNotes: '/api/notes',
         capTables: '/api/cap-tables',
+        equityRounds: '/api/equity-rounds',
+        termSheets: '/api/term-sheets',
       },
     },
   });
@@ -105,6 +109,8 @@ router.use('/search', apiVersion('v1'), searchRoutes);
 router.use('/safes', apiVersion('v1'), safeRoutes);
 router.use('/notes', apiVersion('v1'), convertibleNoteRoutes);
 router.use('/cap-tables', apiVersion('v1'), capTableRoutes);
+router.use('/equity-rounds', apiVersion('v1'), equityRoundRoutes);
+router.use('/term-sheets', apiVersion('v1'), termSheetRoutes);
 
 // API documentation endpoint (placeholder)
 router.get('/docs', (req, res) => {
