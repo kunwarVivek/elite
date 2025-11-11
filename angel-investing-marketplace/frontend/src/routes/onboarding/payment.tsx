@@ -1,12 +1,14 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { Elements } from '@stripe/react-stripe-js'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { ArrowLeft, Lock, CreditCard, Shield, ArrowRight, AlertCircle } from 'lucide-react'
+import { getStripe, isStripeConfigured } from '@/lib/stripe'
+import { PaymentForm, PaymentFormSkeleton } from '@/components/subscription/PaymentForm'
+import { subscriptionApi } from '@/lib/subscription-api'
 
 export const Route = createFileRoute('/onboarding/payment')({
   component: OnboardingPaymentPage,
@@ -16,6 +18,12 @@ function OnboardingPaymentPage() {
   const navigate = useNavigate()
   const [isProcessing, setIsProcessing] = useState(false)
   const [setupMethod, setSetupMethod] = useState<'now' | 'later'>('later')
+  const [clientSecret, setClientSecret] = useState<string>('')
+  const [setupIntentLoading, setSetupIntentLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Check if Stripe is configured
+  const stripeConfigured = isStripeConfigured()
 
   // Get selected plan from localStorage
   const selectedPlanId = localStorage.getItem('onboarding_plan') || 'free'
@@ -44,24 +52,41 @@ function OnboardingPaymentPage() {
 
   const plan = getPlanDetails(selectedPlanId)
 
-  const handleStartTrial = async () => {
-    setIsProcessing(true)
+  // Create SetupIntent when user chooses to add payment now
+  useEffect(() => {
+    if (setupMethod === 'now' && stripeConfigured && !clientSecret && selectedPlanId !== 'free') {
+      const createSetupIntent = async () => {
+        setSetupIntentLoading(true)
+        setError(null)
+        try {
+          const { clientSecret: secret } = await subscriptionApi.createSetupIntent()
+          setClientSecret(secret)
+        } catch (err) {
+          console.error('Error creating SetupIntent:', err)
+          setError('Failed to initialize payment form. Please try again.')
+        } finally {
+          setSetupIntentLoading(false)
+        }
+      }
 
-    try {
-      // TODO: Integrate with backend subscription API
-      // For now, just simulate the trial setup
-      await new Promise(resolve => setTimeout(resolve, 1500))
-
-      // Store trial start info
-      localStorage.setItem('trial_started', 'true')
-      localStorage.setItem('trial_start_date', new Date().toISOString())
-
-      // Navigate to profile completion
-      navigate({ to: '/onboarding/profile' })
-    } catch (error) {
-      console.error('Error starting trial:', error)
-      setIsProcessing(false)
+      createSetupIntent()
     }
+  }, [setupMethod, stripeConfigured, clientSecret, selectedPlanId])
+
+  const handlePaymentSuccess = async (paymentMethodId?: string) => {
+    // Payment method saved successfully
+    localStorage.setItem('trial_started', 'true')
+    localStorage.setItem('trial_start_date', new Date().toISOString())
+    if (paymentMethodId) {
+      localStorage.setItem('payment_method_added', 'true')
+    }
+
+    // Navigate to profile completion
+    navigate({ to: '/onboarding/profile' })
+  }
+
+  const handlePaymentError = (errorMessage: string) => {
+    setError(errorMessage)
   }
 
   const handleSetupPaymentLater = () => {
@@ -202,35 +227,46 @@ function OnboardingPaymentPage() {
 
                   {setupMethod === 'now' && (
                     <div className="mt-4 space-y-4 border-t pt-4">
-                      {/* Stripe Elements would go here */}
-                      <Alert>
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>
-                          Payment integration coming soon. For now, you can start your trial without entering payment details.
-                        </AlertDescription>
-                      </Alert>
+                      {!stripeConfigured && (
+                        <Alert>
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription>
+                            Payment integration is not configured. Please contact support or continue without adding a payment method.
+                          </AlertDescription>
+                        </Alert>
+                      )}
 
-                      {/* Placeholder for Stripe Elements */}
-                      <div className="space-y-4 opacity-50">
-                        <div>
-                          <Label htmlFor="card-number">Card Number</Label>
-                          <Input id="card-number" placeholder="1234 5678 9012 3456" disabled />
-                        </div>
-                        <div className="grid gap-4 md:grid-cols-2">
-                          <div>
-                            <Label htmlFor="expiry">Expiry Date</Label>
-                            <Input id="expiry" placeholder="MM / YY" disabled />
-                          </div>
-                          <div>
-                            <Label htmlFor="cvc">CVC</Label>
-                            <Input id="cvc" placeholder="123" disabled />
-                          </div>
-                        </div>
-                        <div>
-                          <Label htmlFor="zip">ZIP Code</Label>
-                          <Input id="zip" placeholder="12345" disabled />
-                        </div>
-                      </div>
+                      {error && (
+                        <Alert variant="destructive">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription>{error}</AlertDescription>
+                        </Alert>
+                      )}
+
+                      {stripeConfigured && selectedPlanId !== 'free' && (
+                        <>
+                          {setupIntentLoading || !clientSecret ? (
+                            <PaymentFormSkeleton />
+                          ) : (
+                            <Elements
+                              stripe={getStripe()}
+                              options={{
+                                clientSecret,
+                                appearance: {
+                                  theme: 'stripe',
+                                },
+                              }}
+                            >
+                              <PaymentForm
+                                onSuccess={handlePaymentSuccess}
+                                onError={handlePaymentError}
+                                submitButtonText="Save & Start Trial"
+                                showHeader={false}
+                              />
+                            </Elements>
+                          )}
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -276,24 +312,26 @@ function OnboardingPaymentPage() {
                   </div>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex gap-3">
-                  <Button
-                    onClick={setupMethod === 'now' ? handleStartTrial : handleSetupPaymentLater}
-                    disabled={isProcessing}
-                    className="flex-1"
-                    size="lg"
-                  >
-                    {isProcessing ? (
-                      'Setting up trial...'
-                    ) : (
-                      <>
-                        Start Free Trial
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </>
-                    )}
-                  </Button>
-                </div>
+                {/* Action Buttons - Only show for "later" option */}
+                {setupMethod === 'later' && (
+                  <div className="flex gap-3">
+                    <Button
+                      onClick={handleSetupPaymentLater}
+                      disabled={isProcessing}
+                      className="flex-1"
+                      size="lg"
+                    >
+                      {isProcessing ? (
+                        'Setting up trial...'
+                      ) : (
+                        <>
+                          Start Free Trial
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
 
                 <p className="text-center text-xs text-gray-500">
                   By starting your trial, you agree to our{' '}

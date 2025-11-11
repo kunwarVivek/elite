@@ -267,6 +267,90 @@ export const handleSubscriptionError = (error: any): {
   }
 }
 
+// ============================================================================
+// STRIPE INTEGRATION
+// ============================================================================
+
+/**
+ * Create a SetupIntent for collecting payment method
+ */
+export const createSetupIntent = async (): Promise<{
+  clientSecret: string
+  setupIntentId: string
+  customerId: string
+}> => {
+  const response = await api.post('/subscriptions/stripe/setup-intent')
+  return response.data
+}
+
+/**
+ * Create a subscription with Stripe
+ */
+export const createStripeSubscription = async (
+  planId: string,
+  paymentMethodId?: string
+): Promise<{
+  subscription: Subscription
+  stripeSubscription: {
+    id: string
+    status: string
+    clientSecret?: string
+  }
+}> => {
+  const response = await api.post('/subscriptions/stripe/create', {
+    planId,
+    paymentMethodId,
+  })
+  return response.data
+}
+
+/**
+ * Create a billing portal session for customer self-service
+ */
+export const createBillingPortalSession = async (returnUrl?: string): Promise<{
+  url: string
+  sessionId: string
+}> => {
+  const response = await api.post('/subscriptions/stripe/billing-portal', {
+    returnUrl,
+  })
+  return response.data
+}
+
+/**
+ * Get upcoming invoice
+ */
+export const getUpcomingInvoice = async (): Promise<{
+  amount: number
+  currency: string
+  periodStart: string
+  periodEnd: string
+  dueDate?: string
+}> => {
+  const response = await api.get('/subscriptions/stripe/upcoming-invoice')
+  return response.data.invoice
+}
+
+/**
+ * List saved payment methods
+ */
+export const listPaymentMethods = async (): Promise<
+  Array<{
+    id: string
+    type: string
+    card: {
+      brand: string
+      last4: string
+      expMonth: number
+      expYear: number
+    } | null
+    isDefault: boolean
+  }>
+> => {
+  const response = await api.get('/subscriptions/stripe/payment-methods')
+  return response.data.paymentMethods
+}
+
 // Export subscription API object
 export const subscriptionApi = {
   // Plans
@@ -287,6 +371,13 @@ export const subscriptionApi = {
   // Admin
   getAll: getAllSubscriptions,
   getMetrics: getRevenueMetrics,
+
+  // Stripe integration
+  createSetupIntent,
+  createStripeSubscription,
+  createBillingPortalSession,
+  getUpcomingInvoice,
+  listPaymentMethods,
 
   // Helpers
   isFeatureAvailable,
