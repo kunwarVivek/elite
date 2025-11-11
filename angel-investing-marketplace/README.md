@@ -193,6 +193,17 @@ VITE_BETTER_AUTH_URL="http://localhost:3001"
 VITE_STRIPE_PUBLISHABLE_KEY="pk_test_your_stripe_publishable_key"
 ```
 
+## 📚 Documentation
+
+Comprehensive guides are available in the `/docs` folder:
+
+- **[DEPLOYMENT_GUIDE.md](./docs/DEPLOYMENT_GUIDE.md)** - Complete deployment guide for production
+- **[IMPLEMENTATION_STATUS.md](./docs/IMPLEMENTATION_STATUS.md)** - Platform implementation status and roadmap
+- **[STRIPE_INTEGRATION_GUIDE.md](./docs/STRIPE_INTEGRATION_GUIDE.md)** - Stripe payment and subscription setup
+- **[EMAIL_NOTIFICATIONS.md](./docs/EMAIL_NOTIFICATIONS.md)** - Email notification system documentation
+- **[FEATURE_GATING_GUIDE.md](./docs/FEATURE_GATING_GUIDE.md)** - Subscription-based feature access
+- **[DATABASE_SETUP.md](./docs/DATABASE_SETUP.md)** - Database schema and migration guide
+
 ## 🐳 Docker Development
 
 The project includes a complete Docker setup with:
