@@ -9,6 +9,7 @@ import {
   xssPrevention,
   inputSanitization
 } from '../middleware/security.js';
+import { usageLimit, trackUsageAfter } from '../middleware/feature-gate.middleware.js';
 import {
   uploadDocumentSchema,
   updateDocumentSchema,
@@ -37,8 +38,16 @@ router.use(inputSanitization);
 // All other document routes require authentication
 router.use(authenticate);
 
-// Upload document
-router.post('/upload', upload.single('file'), validateBody(uploadDocumentSchema), documentController.uploadDocument.bind(documentController));
+// Upload document - enforces document count and storage limits
+router.post(
+  '/upload',
+  usageLimit('documents'),
+  usageLimit('documentStorageMB'),
+  upload.single('file'),
+  validateBody(uploadDocumentSchema),
+  documentController.uploadDocument.bind(documentController),
+  trackUsageAfter('documents', 1)
+);
 
 // List documents
 router.get('/', validateBody(documentListQuerySchema), documentController.listDocuments.bind(documentController));

@@ -24,6 +24,15 @@ import socialRoutes from './social.routes.js';
 import spvRoutes from './spv.routes.js';
 import searchRoutes from './search.routes.js';
 import paymentMethodsRoutes from './payment-methods.routes.js';
+import safeRoutes from './safe.routes.js';
+import convertibleNoteRoutes from './convertible-note.routes.js';
+import capTableRoutes from './cap-table.routes.js';
+import equityRoundRoutes from './equity-round.routes.js';
+import termSheetRoutes from './term-sheet.routes.js';
+import investorRightsRoutes from './investor-rights.routes.js';
+import exitManagementRoutes from './exit-management.routes.js';
+import { subscriptionRouter, subscriptionPlansRouter } from './subscription.routes.js';
+import webhookRoutes from './webhook.routes.js';
 
 // Create main router
 const router = Router();
@@ -66,6 +75,15 @@ router.get('/', (req, res) => {
         messages: '/api/messages',
         notifications: '/api/notifications',
         search: '/api/search',
+        safes: '/api/safes',
+        convertibleNotes: '/api/notes',
+        capTables: '/api/cap-tables',
+        equityRounds: '/api/equity-rounds',
+        termSheets: '/api/term-sheets',
+        investorRights: '/api/investor-rights',
+        exitEvents: '/api/exit-events',
+        subscriptions: '/api/subscriptions',
+        subscriptionPlans: '/api/subscription-plans',
       },
     },
   });
@@ -73,6 +91,9 @@ router.get('/', (req, res) => {
 
 // Mount health check routes (no versioning needed for health checks)
 router.use('/health', healthRoutes);
+
+// Mount webhook routes (no versioning, must be before JSON middleware in main app)
+router.use('/webhooks', webhookRoutes);
 
 // Mount API routes with versioning
 router.use('/auth', apiVersion('v1'), authRoutes);
@@ -96,6 +117,15 @@ router.use('/messages', apiVersion('v1'), messageRoutes);
 router.use('/documents', apiVersion('v1'), documentRoutes);
 router.use('/notifications', apiVersion('v1'), notificationRoutes);
 router.use('/search', apiVersion('v1'), searchRoutes);
+router.use('/safes', apiVersion('v1'), safeRoutes);
+router.use('/notes', apiVersion('v1'), convertibleNoteRoutes);
+router.use('/cap-tables', apiVersion('v1'), capTableRoutes);
+router.use('/equity-rounds', apiVersion('v1'), equityRoundRoutes);
+router.use('/term-sheets', apiVersion('v1'), termSheetRoutes);
+router.use('/investor-rights', apiVersion('v1'), investorRightsRoutes);
+router.use('/exit-events', apiVersion('v1'), exitManagementRoutes);
+router.use('/subscriptions', apiVersion('v1'), subscriptionRouter);
+router.use('/subscription-plans', apiVersion('v1'), subscriptionPlansRouter);
 
 // API documentation endpoint (placeholder)
 router.get('/docs', (req, res) => {

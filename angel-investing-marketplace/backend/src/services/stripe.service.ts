@@ -330,6 +330,340 @@ export class StripeService {
     // TODO: Handle dispute creation - notify admin, update investment status
     // This will be handled by the webhook service
   }
+
+  // ============================================================================
+  // SUBSCRIPTION METHODS
+  // ============================================================================
+
+  /**
+   * Create a SetupIntent for collecting payment method (for subscriptions)
+   */
+  static async createSetupIntent(customerId: string): Promise<{ clientSecret: string; setupIntentId: string }> {
+    try {
+      const setupIntent = await stripe.setupIntents.create({
+        customer: customerId,
+        automatic_payment_methods: {
+          enabled: true,
+        },
+        usage: 'off_session', // Allow charging without customer present
+      });
+
+      logger.info('SetupIntent created for subscription', {
+        setupIntentId: setupIntent.id,
+        customerId,
+      });
+
+      return {
+        clientSecret: setupIntent.client_secret!,
+        setupIntentId: setupIntent.id,
+      };
+    } catch (error) {
+      logger.error('Failed to create SetupIntent', { error, customerId });
+      throw new Error(`SetupIntent creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Set default payment method for a customer
+   */
+  static async setDefaultPaymentMethod(customerId: string, paymentMethodId: string): Promise<void> {
+    try {
+      // Attach payment method if not already attached
+      try {
+        await stripe.paymentMethods.attach(paymentMethodId, {
+          customer: customerId,
+        });
+      } catch (error: any) {
+        // If already attached, continue
+        if (error.code !== 'resource_already_exists') {
+          throw error;
+        }
+      }
+
+      // Set as default
+      await stripe.customers.update(customerId, {
+        invoice_settings: {
+          default_payment_method: paymentMethodId,
+        },
+      });
+
+      logger.info('Default payment method set', { customerId, paymentMethodId });
+    } catch (error) {
+      logger.error('Failed to set default payment method', { error, customerId, paymentMethodId });
+      throw new Error(`Failed to set default payment method: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Create a subscription
+   */
+  static async createSubscription(params: {
+    customerId: string;
+    priceId: string;
+    trialPeriodDays?: number;
+    metadata?: Record<string, string>;
+  }): Promise<Stripe.Subscription> {
+    try {
+      const subscriptionParams: Stripe.SubscriptionCreateParams = {
+        customer: params.customerId,
+        items: [{ price: params.priceId }],
+        payment_behavior: 'default_incomplete',
+        payment_settings: {
+          save_default_payment_method: 'on_subscription',
+        },
+        expand: ['latest_invoice.payment_intent', 'pending_setup_intent'],
+        metadata: params.metadata || {},
+      };
+
+      // Add trial period if specified
+      if (params.trialPeriodDays && params.trialPeriodDays > 0) {
+        subscriptionParams.trial_period_days = params.trialPeriodDays;
+      }
+
+      const subscription = await stripe.subscriptions.create(subscriptionParams);
+
+      logger.info('Subscription created', {
+        subscriptionId: subscription.id,
+        customerId: params.customerId,
+        priceId: params.priceId,
+        trialPeriodDays: params.trialPeriodDays,
+      });
+
+      return subscription;
+    } catch (error) {
+      logger.error('Failed to create subscription', { error, params });
+      throw new Error(`Subscription creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Update a subscription (change plan, quantity, etc.)
+   */
+  static async updateSubscription(
+    subscriptionId: string,
+    params: Stripe.SubscriptionUpdateParams
+  ): Promise<Stripe.Subscription> {
+    try {
+      const subscription = await stripe.subscriptions.update(subscriptionId, params);
+
+      logger.info('Subscription updated', {
+        subscriptionId,
+        updates: Object.keys(params),
+      });
+
+      return subscription;
+    } catch (error) {
+      logger.error('Failed to update subscription', { error, subscriptionId, params });
+      throw new Error(`Subscription update failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Cancel a subscription
+   */
+  static async cancelSubscription(
+    subscriptionId: string,
+    cancelAtPeriodEnd: boolean = true
+  ): Promise<Stripe.Subscription> {
+    try {
+      let subscription: Stripe.Subscription;
+
+      if (cancelAtPeriodEnd) {
+        // Cancel at period end (user retains access until end of billing period)
+        subscription = await stripe.subscriptions.update(subscriptionId, {
+          cancel_at_period_end: true,
+        });
+      } else {
+        // Cancel immediately
+        subscription = await stripe.subscriptions.cancel(subscriptionId);
+      }
+
+      logger.info('Subscription canceled', {
+        subscriptionId,
+        cancelAtPeriodEnd,
+        status: subscription.status,
+      });
+
+      return subscription;
+    } catch (error) {
+      logger.error('Failed to cancel subscription', { error, subscriptionId, cancelAtPeriodEnd });
+      throw new Error(`Subscription cancellation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Reactivate a canceled subscription
+   */
+  static async reactivateSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
+    try {
+      const subscription = await stripe.subscriptions.update(subscriptionId, {
+        cancel_at_period_end: false,
+      });
+
+      logger.info('Subscription reactivated', { subscriptionId });
+
+      return subscription;
+    } catch (error) {
+      logger.error('Failed to reactivate subscription', { error, subscriptionId });
+      throw new Error(`Subscription reactivation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get subscription details
+   */
+  static async getSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
+    try {
+      return await stripe.subscriptions.retrieve(subscriptionId);
+    } catch (error) {
+      logger.error('Failed to retrieve subscription', { error, subscriptionId });
+      throw new Error(`Subscription retrieval failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Get upcoming invoice for a subscription
+   */
+  static async getUpcomingInvoice(subscriptionId: string): Promise<Stripe.Invoice> {
+    try {
+      return await stripe.invoices.retrieveUpcoming({
+        subscription: subscriptionId,
+      });
+    } catch (error) {
+      logger.error('Failed to retrieve upcoming invoice', { error, subscriptionId });
+      throw new Error(`Invoice retrieval failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Create a billing portal session for customer self-service
+   */
+  static async createBillingPortalSession(
+    customerId: string,
+    returnUrl: string
+  ): Promise<Stripe.BillingPortal.Session> {
+    try {
+      const session = await stripe.billingPortal.sessions.create({
+        customer: customerId,
+        return_url: returnUrl,
+      });
+
+      logger.info('Billing portal session created', { customerId, sessionId: session.id });
+
+      return session;
+    } catch (error) {
+      logger.error('Failed to create billing portal session', { error, customerId });
+      throw new Error(`Billing portal creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * List all subscriptions for a customer
+   */
+  static async listCustomerSubscriptions(customerId: string): Promise<Stripe.Subscription[]> {
+    try {
+      const subscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        status: 'all',
+      });
+
+      return subscriptions.data;
+    } catch (error) {
+      logger.error('Failed to list customer subscriptions', { error, customerId });
+      throw new Error(`Subscription list failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Map Stripe subscription status to application status
+   */
+  static mapStripeStatusToAppStatus(stripeStatus: Stripe.Subscription.Status): string {
+    const statusMap: Record<Stripe.Subscription.Status, string> = {
+      active: 'ACTIVE',
+      trialing: 'TRIALING',
+      past_due: 'PAST_DUE',
+      canceled: 'CANCELED',
+      unpaid: 'UNPAID',
+      incomplete: 'PAST_DUE',
+      incomplete_expired: 'CANCELED',
+      paused: 'CANCELED',
+    };
+
+    return statusMap[stripeStatus] || 'ACTIVE';
+  }
+
+  /**
+   * Create or update a product in Stripe
+   */
+  static async createOrUpdateProduct(params: {
+    name: string;
+    description?: string;
+    metadata?: Record<string, string>;
+    productId?: string;
+  }): Promise<Stripe.Product> {
+    try {
+      if (params.productId) {
+        // Update existing product
+        return await stripe.products.update(params.productId, {
+          name: params.name,
+          description: params.description,
+          metadata: params.metadata,
+        });
+      } else {
+        // Create new product
+        return await stripe.products.create({
+          name: params.name,
+          description: params.description,
+          metadata: params.metadata,
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to create/update product', { error, params });
+      throw new Error(`Product operation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Create a price for a product
+   */
+  static async createPrice(params: {
+    productId: string;
+    unitAmount: number; // in cents
+    currency: string;
+    interval: 'month' | 'year';
+    metadata?: Record<string, string>;
+  }): Promise<Stripe.Price> {
+    try {
+      return await stripe.prices.create({
+        product: params.productId,
+        unit_amount: params.unitAmount,
+        currency: params.currency,
+        recurring: {
+          interval: params.interval,
+        },
+        metadata: params.metadata,
+      });
+    } catch (error) {
+      logger.error('Failed to create price', { error, params });
+      throw new Error(`Price creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Detach a payment method from a customer
+   */
+  static async detachPaymentMethod(paymentMethodId: string): Promise<Stripe.PaymentMethod> {
+    try {
+      const paymentMethod = await stripe.paymentMethods.detach(paymentMethodId);
+
+      logger.info('Payment method detached', { paymentMethodId });
+
+      return paymentMethod;
+    } catch (error) {
+      logger.error('Failed to detach payment method', { error, paymentMethodId });
+      throw new Error(`Payment method detach failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
 }
 
 export default StripeService;
