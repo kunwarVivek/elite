@@ -1,6 +1,7 @@
 import { Request, Response } from 'express'
 import { subscriptionService } from '../services/subscription.service'
 import { SubscriptionStatus, PlanTier } from '@prisma/client'
+import StripeService from '../services/stripe.service.js'
 
 export class SubscriptionController {
   /**
@@ -404,6 +405,232 @@ export class SubscriptionController {
     } catch (error: any) {
       console.error('Error handling trial expiry:', error)
       res.status(500).json({ error: error.message || 'Failed to handle trial expiry' })
+    }
+  }
+
+  // ============================================================================
+  // STRIPE INTEGRATION ENDPOINTS
+  // ============================================================================
+
+  /**
+   * Create a SetupIntent for payment method collection
+   * POST /api/subscriptions/stripe/setup-intent
+   */
+  async createSetupIntent(req: Request, res: Response) {
+    try {
+      const userId = req.user?.id
+      const user = req.user
+
+      if (!userId || !user) {
+        return res.status(401).json({ error: 'Unauthorized' })
+      }
+
+      // Get or create Stripe customer
+      const customerId = await StripeService.getOrCreateCustomer(
+        user.email,
+        user.name || '',
+        userId
+      )
+
+      // Create SetupIntent
+      const { clientSecret, setupIntentId } = await StripeService.createSetupIntent(customerId)
+
+      res.json({
+        clientSecret,
+        setupIntentId,
+        customerId,
+      })
+    } catch (error: any) {
+      console.error('Error creating setup intent:', error)
+      res.status(500).json({ error: error.message || 'Failed to create setup intent' })
+    }
+  }
+
+  /**
+   * Create subscription with Stripe
+   * POST /api/subscriptions/stripe/create
+   */
+  async createStripeSubscription(req: Request, res: Response) {
+    try {
+      const userId = req.user?.id
+      const user = req.user
+
+      if (!userId || !user) {
+        return res.status(401).json({ error: 'Unauthorized' })
+      }
+
+      const { planId, paymentMethodId } = req.body
+
+      if (!planId) {
+        return res.status(400).json({ error: 'Plan ID is required' })
+      }
+
+      // Check if user already has an active subscription
+      const existing = await subscriptionService.getUserSubscription(userId)
+      if (existing && existing.status !== 'CANCELED') {
+        return res.status(400).json({ error: 'User already has an active subscription' })
+      }
+
+      // Get plan details
+      const plan = await subscriptionService.getSubscriptionPlanById(planId)
+      if (!plan) {
+        return res.status(404).json({ error: 'Plan not found' })
+      }
+
+      if (!plan.stripePriceId) {
+        return res.status(400).json({ error: 'Plan does not have Stripe integration configured' })
+      }
+
+      // Get or create Stripe customer
+      const customerId = await StripeService.getOrCreateCustomer(
+        user.email,
+        user.name || '',
+        userId
+      )
+
+      // Attach payment method if provided
+      if (paymentMethodId) {
+        await StripeService.setDefaultPaymentMethod(customerId, paymentMethodId)
+      }
+
+      // Calculate trial days based on plan
+      const trialPeriodDays = plan.trial && plan.trialDays > 0 ? plan.trialDays : undefined
+
+      // Create Stripe subscription
+      const stripeSubscription = await StripeService.createSubscription({
+        customerId,
+        priceId: plan.stripePriceId,
+        trialPeriodDays,
+        metadata: {
+          userId,
+          planId: plan.id,
+          planName: plan.name,
+        },
+      })
+
+      // Create subscription in database (will be updated by webhook)
+      const subscription = await subscriptionService.createSubscription({
+        userId,
+        planId: plan.id,
+        stripeSubscriptionId: stripeSubscription.id,
+        stripeCustomerId: customerId,
+        stripePaymentMethodId: paymentMethodId,
+        trialDays: trialPeriodDays,
+      })
+
+      res.status(201).json({
+        subscription,
+        stripeSubscription: {
+          id: stripeSubscription.id,
+          status: stripeSubscription.status,
+          clientSecret: (stripeSubscription as any).latest_invoice?.payment_intent?.client_secret ||
+                       (stripeSubscription as any).pending_setup_intent?.client_secret,
+        },
+      })
+    } catch (error: any) {
+      console.error('Error creating Stripe subscription:', error)
+      res.status(500).json({ error: error.message || 'Failed to create subscription' })
+    }
+  }
+
+  /**
+   * Create billing portal session
+   * POST /api/subscriptions/stripe/billing-portal
+   */
+  async createBillingPortalSession(req: Request, res: Response) {
+    try {
+      const userId = req.user?.id
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' })
+      }
+
+      // Get user's subscription to find Stripe customer ID
+      const subscription = await subscriptionService.getUserSubscription(userId)
+
+      if (!subscription || !subscription.stripeCustomerId) {
+        return res.status(404).json({ error: 'No active subscription with payment method found' })
+      }
+
+      const { returnUrl } = req.body
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000'
+      const redirectUrl = returnUrl || `${frontendUrl}/settings/subscription`
+
+      // Create billing portal session
+      const session = await StripeService.createBillingPortalSession(
+        subscription.stripeCustomerId,
+        redirectUrl
+      )
+
+      res.json({
+        url: session.url,
+        sessionId: session.id,
+      })
+    } catch (error: any) {
+      console.error('Error creating billing portal session:', error)
+      res.status(500).json({ error: error.message || 'Failed to create billing portal session' })
+    }
+  }
+
+  /**
+   * Get upcoming invoice
+   * GET /api/subscriptions/stripe/upcoming-invoice
+   */
+  async getUpcomingInvoice(req: Request, res: Response) {
+    try {
+      const userId = req.user?.id
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' })
+      }
+
+      const subscription = await subscriptionService.getUserSubscription(userId)
+
+      if (!subscription || !subscription.stripeSubscriptionId) {
+        return res.status(404).json({ error: 'No active subscription found' })
+      }
+
+      const invoice = await StripeService.getUpcomingInvoice(subscription.stripeSubscriptionId)
+
+      res.json({
+        invoice: {
+          amount: invoice.amount_due / 100,
+          currency: invoice.currency,
+          periodStart: new Date(invoice.period_start * 1000),
+          periodEnd: new Date(invoice.period_end * 1000),
+          dueDate: invoice.due_date ? new Date(invoice.due_date * 1000) : null,
+        },
+      })
+    } catch (error: any) {
+      console.error('Error fetching upcoming invoice:', error)
+      res.status(500).json({ error: error.message || 'Failed to fetch upcoming invoice' })
+    }
+  }
+
+  /**
+   * List payment methods
+   * GET /api/subscriptions/stripe/payment-methods
+   */
+  async listPaymentMethods(req: Request, res: Response) {
+    try {
+      const userId = req.user?.id
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' })
+      }
+
+      const subscription = await subscriptionService.getUserSubscription(userId)
+
+      if (!subscription || !subscription.stripeCustomerId) {
+        return res.json({ paymentMethods: [] })
+      }
+
+      const paymentMethods = await StripeService.getCustomerPaymentMethods(subscription.stripeCustomerId)
+
+      res.json({ paymentMethods })
+    } catch (error: any) {
+      console.error('Error fetching payment methods:', error)
+      res.status(500).json({ error: error.message || 'Failed to fetch payment methods' })
     }
   }
 }

@@ -32,6 +32,7 @@ import termSheetRoutes from './term-sheet.routes.js';
 import investorRightsRoutes from './investor-rights.routes.js';
 import exitManagementRoutes from './exit-management.routes.js';
 import { subscriptionRouter, subscriptionPlansRouter } from './subscription.routes.js';
+import webhookRoutes from './webhook.routes.js';
 
 // Create main router
 const router = Router();
@@ -90,6 +91,9 @@ router.get('/', (req, res) => {
 
 // Mount health check routes (no versioning needed for health checks)
 router.use('/health', healthRoutes);
+
+// Mount webhook routes (no versioning, must be before JSON middleware in main app)
+router.use('/webhooks', webhookRoutes);
 
 // Mount API routes with versioning
 router.use('/auth', apiVersion('v1'), authRoutes);

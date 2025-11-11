@@ -21,6 +21,13 @@ router.get('/check-feature/:featureName', subscriptionController.checkFeatureAcc
 router.get('/check-limit/:limitName', subscriptionController.checkUsageLimit.bind(subscriptionController))
 router.post('/track-usage', subscriptionController.trackUsage.bind(subscriptionController))
 
+// Stripe integration routes
+router.post('/stripe/setup-intent', subscriptionController.createSetupIntent.bind(subscriptionController))
+router.post('/stripe/create', subscriptionController.createStripeSubscription.bind(subscriptionController))
+router.post('/stripe/billing-portal', subscriptionController.createBillingPortalSession.bind(subscriptionController))
+router.get('/stripe/upcoming-invoice', subscriptionController.getUpcomingInvoice.bind(subscriptionController))
+router.get('/stripe/payment-methods', subscriptionController.listPaymentMethods.bind(subscriptionController))
+
 // Admin routes
 router.get('/metrics/revenue', subscriptionController.getRevenueMetrics.bind(subscriptionController))
 router.post('/:id/renew', subscriptionController.processRenewal.bind(subscriptionController))
