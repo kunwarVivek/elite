@@ -1,6 +1,7 @@
 import express from 'express';
 import { capTableController } from '../controllers/cap-table.controller.js';
 import { authenticate } from '../middleware/auth.js';
+import { featureGate, requireTier } from '../middleware/feature-gate.middleware.js';
 
 const router = express.Router();
 
@@ -10,9 +11,13 @@ router.use(authenticate);
 /**
  * @route   POST /api/cap-tables
  * @desc    Create a new cap table snapshot
- * @access  Private (Founder/Admin)
+ * @access  Private (Founder/Admin) - Requires Pro tier or higher
  */
-router.post('/', capTableController.createCapTable.bind(capTableController));
+router.post(
+  '/',
+  featureGate('capTableManagement'),
+  capTableController.createCapTable.bind(capTableController)
+);
 
 /**
  * @route   GET /api/cap-tables/:id
@@ -45,16 +50,25 @@ router.post('/:id/stakeholders', capTableController.addStakeholder.bind(capTable
 /**
  * @route   POST /api/cap-tables/startup/:startupId/dilution
  * @desc    Calculate dilution from new round
- * @access  Private (Founder/Admin)
+ * @access  Private (Founder/Admin) - Requires Pro tier or higher
  */
-router.post('/startup/:startupId/dilution', capTableController.calculateDilution.bind(capTableController));
+router.post(
+  '/startup/:startupId/dilution',
+  featureGate('dilutionCalculator'),
+  capTableController.calculateDilution.bind(capTableController)
+);
 
 /**
  * @route   POST /api/cap-tables/startup/:startupId/waterfall
  * @desc    Calculate exit waterfall distribution
- * @access  Private (Founder/Admin)
+ * @access  Private (Founder/Admin) - Requires Growth tier or higher
  */
-router.post('/startup/:startupId/waterfall', capTableController.calculateWaterfall.bind(capTableController));
+router.post(
+  '/startup/:startupId/waterfall',
+  featureGate('waterfallAnalysis'),
+  requireTier('GROWTH'),
+  capTableController.calculateWaterfall.bind(capTableController)
+);
 
 /**
  * @route   GET /api/cap-tables/:id/export

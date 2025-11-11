@@ -1,6 +1,7 @@
 import express from 'express';
 import { safeController } from '../controllers/safe.controller.js';
 import { authenticate } from '../middleware/auth.js';
+import { featureGate, usageLimit, trackUsageAfter } from '../middleware/feature-gate.middleware.js';
 
 const router = express.Router();
 
@@ -10,9 +11,15 @@ router.use(authenticate);
 /**
  * @route   POST /api/safes
  * @desc    Create a new SAFE agreement
- * @access  Private (Investor/Founder)
+ * @access  Private (Investor/Founder) - Requires Pro tier or higher
  */
-router.post('/', safeController.createSafe.bind(safeController));
+router.post(
+  '/',
+  featureGate('safeAgreements'),
+  usageLimit('investments'),
+  safeController.createSafe.bind(safeController),
+  trackUsageAfter('investments', 1)
+);
 
 /**
  * @route   GET /api/safes/:id
@@ -45,9 +52,13 @@ router.get('/investor/:investorId', safeController.getSafesByInvestor.bind(safeC
 /**
  * @route   POST /api/safes/:id/convert
  * @desc    Convert SAFE to equity
- * @access  Private (Founder/Admin)
+ * @access  Private (Founder/Admin) - Requires Pro tier or higher
  */
-router.post('/:id/convert', safeController.convertSafe.bind(safeController));
+router.post(
+  '/:id/convert',
+  featureGate('safeAgreements'),
+  safeController.convertSafe.bind(safeController)
+);
 
 /**
  * @route   POST /api/safes/:id/calculate-conversion

@@ -1,6 +1,7 @@
 import express from 'express';
 import { convertibleNoteController } from '../controllers/convertible-note.controller.js';
 import { authenticate } from '../middleware/auth.js';
+import { featureGate, usageLimit, trackUsageAfter } from '../middleware/feature-gate.middleware.js';
 
 const router = express.Router();
 
@@ -10,9 +11,15 @@ router.use(authenticate);
 /**
  * @route   POST /api/notes
  * @desc    Create a new convertible note
- * @access  Private (Investor/Founder)
+ * @access  Private (Investor/Founder) - Requires Pro tier or higher
  */
-router.post('/', convertibleNoteController.createNote.bind(convertibleNoteController));
+router.post(
+  '/',
+  featureGate('convertibleNotes'),
+  usageLimit('investments'),
+  convertibleNoteController.createNote.bind(convertibleNoteController),
+  trackUsageAfter('investments', 1)
+);
 
 /**
  * @route   GET /api/notes/:id
@@ -59,9 +66,13 @@ router.get('/:id/interest', convertibleNoteController.calculateInterest.bind(con
 /**
  * @route   POST /api/notes/:id/convert
  * @desc    Convert note to equity
- * @access  Private (Founder/Admin)
+ * @access  Private (Founder/Admin) - Requires Pro tier or higher
  */
-router.post('/:id/convert', convertibleNoteController.convertNote.bind(convertibleNoteController));
+router.post(
+  '/:id/convert',
+  featureGate('convertibleNotes'),
+  convertibleNoteController.convertNote.bind(convertibleNoteController)
+);
 
 /**
  * @route   POST /api/notes/:id/repay

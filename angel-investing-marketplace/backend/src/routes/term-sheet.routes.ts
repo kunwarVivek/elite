@@ -1,6 +1,7 @@
 import express from 'express';
 import { termSheetController } from '../controllers/term-sheet.controller.js';
 import { authenticate } from '../middleware/auth.js';
+import { featureGate, usageLimit, trackUsageAfter } from '../middleware/feature-gate.middleware.js';
 
 const router = express.Router();
 
@@ -10,9 +11,15 @@ router.use(authenticate);
 /**
  * @route   POST /api/term-sheets
  * @desc    Create a new term sheet
- * @access  Private (Investor/Admin)
+ * @access  Private (Investor/Admin) - Requires Pro tier or higher, limited by plan
  */
-router.post('/', termSheetController.createTermSheet.bind(termSheetController));
+router.post(
+  '/',
+  featureGate('termSheetTemplates'),
+  usageLimit('termSheetsPerYear'),
+  termSheetController.createTermSheet.bind(termSheetController),
+  trackUsageAfter('termSheetsPerYear', 1)
+);
 
 /**
  * @route   GET /api/term-sheets/:id
