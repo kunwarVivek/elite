@@ -214,6 +214,237 @@ export const emailTemplates = {
     `,
     text: 'Security alert: Unusual activity detected on your account. Activity: {{activity}} at {{timestamp}}',
   },
+
+  // ============================================================================
+  // SUBSCRIPTION EMAIL TEMPLATES
+  // ============================================================================
+
+  // Trial started
+  trialStarted: {
+    subject: 'Your {{planName}} Trial Has Started! 🎉',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #28a745;">Welcome to {{planName}}! 🎉</h1>
+        <p>Hi {{name}},</p>
+        <p>Great news! Your {{trialDays}}-day free trial of the <strong>{{planName}}</strong> plan has started.</p>
+        <div style="background-color: #e7f5ff; border-left: 4px solid #007bff; padding: 20px; margin: 20px 0;">
+          <h3 style="margin-top: 0;">Trial Details:</h3>
+          <p style="margin: 5px 0;"><strong>Plan:</strong> {{planName}}</p>
+          <p style="margin: 5px 0;"><strong>Trial Ends:</strong> {{trialEndDate}}</p>
+          <p style="margin: 5px 0;"><strong>Price After Trial:</strong> {{price}}</p>
+        </div>
+        <h3>What's Included:</h3>
+        <ul style="line-height: 1.8;">
+          {{features}}
+        </ul>
+        <p>You won't be charged until your trial ends on <strong>{{trialEndDate}}</strong>. Cancel anytime before then to avoid charges.</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="{{dashboardUrl}}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Go to Dashboard</a>
+        </div>
+        <p style="color: #666; font-size: 14px;">Questions? Reply to this email or visit our help center.</p>
+        <p>Best regards,<br>The Angel Investing Marketplace Team</p>
+      </div>
+    `,
+    text: 'Welcome to {{planName}}! Your {{trialDays}}-day free trial has started. Trial ends: {{trialEndDate}}. Price after trial: {{price}}.',
+  },
+
+  // Trial ending soon (3 days before)
+  trialEndingSoon: {
+    subject: 'Your Trial Ends in {{daysLeft}} Days',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #ff9800;">Your Trial Ends Soon</h1>
+        <p>Hi {{name}},</p>
+        <p>Your {{planName}} trial will end in <strong>{{daysLeft}} days</strong> on {{trialEndDate}}.</p>
+        <div style="background-color: #fff3cd; border: 1px solid #ffc107; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <h3 style="margin-top: 0;">What happens next?</h3>
+          <p>After your trial ends, you'll automatically be subscribed to the <strong>{{planName}}</strong> plan at <strong>{{price}}</strong>.</p>
+          <p style="margin: 10px 0;"><strong>First payment:</strong> {{nextBillingDate}}</p>
+          <p style="margin: 10px 0;"><strong>Payment method:</strong> {{paymentMethod}}</p>
+        </div>
+        <h3>Your Options:</h3>
+        <div style="margin: 20px 0;">
+          <p><strong>1. Continue with {{planName}}</strong> - No action needed! Enjoy all the features.</p>
+          <p><strong>2. Change your plan</strong> - Upgrade or downgrade to a plan that fits your needs.</p>
+          <p><strong>3. Cancel anytime</strong> - Cancel before {{trialEndDate}} to avoid charges.</p>
+        </div>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="{{manageSubscriptionUrl}}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 5px;">Manage Subscription</a>
+          <a href="{{pricingUrl}}" style="background-color: #6c757d; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 5px;">View Plans</a>
+        </div>
+        <p>Best regards,<br>The Angel Investing Marketplace Team</p>
+      </div>
+    `,
+    text: 'Your {{planName}} trial ends in {{daysLeft}} days on {{trialEndDate}}. You will be charged {{price}} on {{nextBillingDate}}. Manage subscription: {{manageSubscriptionUrl}}',
+  },
+
+  // Trial ended / Subscription activated
+  trialEnded: {
+    subject: 'Welcome to {{planName}}! Your Subscription is Active',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #28a745;">Welcome to {{planName}}! 🚀</h1>
+        <p>Hi {{name}},</p>
+        <p>Your free trial has ended and your <strong>{{planName}}</strong> subscription is now active!</p>
+        <div style="background-color: #e7f5ff; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <h3 style="margin-top: 0;">Subscription Details:</h3>
+          <p style="margin: 5px 0;"><strong>Plan:</strong> {{planName}}</p>
+          <p style="margin: 5px 0;"><strong>Price:</strong> {{price}}</p>
+          <p style="margin: 5px 0;"><strong>Next Billing Date:</strong> {{nextBillingDate}}</p>
+          <p style="margin: 5px 0;"><strong>Payment Method:</strong> {{paymentMethod}}</p>
+        </div>
+        <h3>What's Next:</h3>
+        <p>Continue enjoying full access to all {{planName}} features. You can manage your subscription, update your payment method, or change plans at any time.</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="{{dashboardUrl}}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Go to Dashboard</a>
+        </div>
+        <p style="color: #666; font-size: 14px;">Need help? Our support team is here for you.</p>
+        <p>Best regards,<br>The Angel Investing Marketplace Team</p>
+      </div>
+    `,
+    text: 'Your {{planName}} subscription is now active! Price: {{price}}. Next billing: {{nextBillingDate}}.',
+  },
+
+  // Payment successful (receipt)
+  paymentSuccessful: {
+    subject: 'Payment Received - {{planName}} Subscription',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #28a745;">Payment Received ✓</h1>
+        <p>Hi {{name}},</p>
+        <p>Thank you! We've successfully processed your payment for the <strong>{{planName}}</strong> subscription.</p>
+        <div style="background-color: #f8f9fa; border: 2px solid #28a745; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #28a745;">Receipt</h3>
+          <p style="margin: 5px 0;"><strong>Date:</strong> {{paymentDate}}</p>
+          <p style="margin: 5px 0;"><strong>Amount:</strong> {{amount}}</p>
+          <p style="margin: 5px 0;"><strong>Plan:</strong> {{planName}}</p>
+          <p style="margin: 5px 0;"><strong>Billing Period:</strong> {{billingPeriod}}</p>
+          <p style="margin: 5px 0;"><strong>Payment Method:</strong> {{paymentMethod}}</p>
+          <p style="margin: 5px 0;"><strong>Invoice:</strong> <a href="{{invoiceUrl}}" style="color: #007bff;">View Invoice</a></p>
+        </div>
+        <p>Your subscription is active and will renew on <strong>{{nextBillingDate}}</strong>.</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="{{invoiceUrl}}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Download Invoice</a>
+        </div>
+        <p style="color: #666; font-size: 14px;">Keep this email for your records. For questions about this payment, reply to this email.</p>
+        <p>Best regards,<br>The Angel Investing Marketplace Team</p>
+      </div>
+    `,
+    text: 'Payment received for {{planName}} subscription. Amount: {{amount}}. Date: {{paymentDate}}. Next billing: {{nextBillingDate}}. Invoice: {{invoiceUrl}}',
+  },
+
+  // Payment failed
+  paymentFailed: {
+    subject: 'Action Required: Payment Failed for {{planName}}',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #dc3545;">Payment Failed ⚠️</h1>
+        <p>Hi {{name}},</p>
+        <p>We were unable to process your payment for the <strong>{{planName}}</strong> subscription.</p>
+        <div style="background-color: #fff3cd; border: 2px solid #dc3545; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #dc3545;">Payment Details:</h3>
+          <p style="margin: 5px 0;"><strong>Amount:</strong> {{amount}}</p>
+          <p style="margin: 5px 0;"><strong>Payment Method:</strong> {{paymentMethod}}</p>
+          <p style="margin: 5px 0;"><strong>Reason:</strong> {{failureReason}}</p>
+        </div>
+        <h3>What This Means:</h3>
+        <p>Your subscription is currently <strong>past due</strong>. To avoid service interruption, please update your payment method or retry the payment.</p>
+        <p><strong>We'll retry automatically</strong> in the next few days, but you can update your payment method now to restore access immediately.</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="{{updatePaymentUrl}}" style="background-color: #dc3545; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Update Payment Method</a>
+        </div>
+        <p style="color: #666; font-size: 14px;">Having trouble? Contact our support team for assistance.</p>
+        <p>Best regards,<br>The Angel Investing Marketplace Team</p>
+      </div>
+    `,
+    text: 'Payment failed for {{planName}} subscription. Amount: {{amount}}. Reason: {{failureReason}}. Please update your payment method: {{updatePaymentUrl}}',
+  },
+
+  // Upcoming payment (7 days before)
+  upcomingPayment: {
+    subject: 'Upcoming Payment: {{amount}} on {{billingDate}}',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #007bff;">Upcoming Payment Reminder</h1>
+        <p>Hi {{name}},</p>
+        <p>This is a friendly reminder that your next payment for the <strong>{{planName}}</strong> subscription is coming up.</p>
+        <div style="background-color: #e7f5ff; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <h3 style="margin-top: 0;">Payment Details:</h3>
+          <p style="margin: 5px 0;"><strong>Amount:</strong> {{amount}}</p>
+          <p style="margin: 5px 0;"><strong>Billing Date:</strong> {{billingDate}}</p>
+          <p style="margin: 5px 0;"><strong>Payment Method:</strong> {{paymentMethod}}</p>
+          <p style="margin: 5px 0;"><strong>Plan:</strong> {{planName}}</p>
+        </div>
+        <p>Your payment method will be automatically charged on <strong>{{billingDate}}</strong>. No action is needed unless you want to make changes.</p>
+        <h3>Need to Make Changes?</h3>
+        <ul style="line-height: 1.8;">
+          <li>Update your payment method</li>
+          <li>Change your subscription plan</li>
+          <li>View your billing history</li>
+        </ul>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="{{manageSubscriptionUrl}}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Manage Subscription</a>
+        </div>
+        <p>Best regards,<br>The Angel Investing Marketplace Team</p>
+      </div>
+    `,
+    text: 'Upcoming payment reminder: {{amount}} will be charged on {{billingDate}} for {{planName}} subscription. Payment method: {{paymentMethod}}. Manage subscription: {{manageSubscriptionUrl}}',
+  },
+
+  // Subscription canceled
+  subscriptionCanceled: {
+    subject: 'Subscription Canceled - {{planName}}',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #6c757d;">Subscription Canceled</h1>
+        <p>Hi {{name}},</p>
+        <p>Your <strong>{{planName}}</strong> subscription has been canceled as requested.</p>
+        <div style="background-color: #f8f9fa; border-left: 4px solid #6c757d; padding: 20px; margin: 20px 0;">
+          <h3 style="margin-top: 0;">Cancellation Details:</h3>
+          <p style="margin: 5px 0;"><strong>Plan:</strong> {{planName}}</p>
+          <p style="margin: 5px 0;"><strong>Access Until:</strong> {{accessEndDate}}</p>
+          <p style="margin: 5px 0;"><strong>Canceled On:</strong> {{canceledDate}}</p>
+        </div>
+        <h3>What This Means:</h3>
+        <p>You'll continue to have access to all <strong>{{planName}}</strong> features until <strong>{{accessEndDate}}</strong>. After that, your account will be downgraded to the Free plan.</p>
+        <p>No further charges will be made to your payment method.</p>
+        <div style="background-color: #e7f5ff; padding: 15px; border-radius: 5px; margin: 20px 0;">
+          <p style="margin: 0;"><strong>Changed your mind?</strong> You can reactivate your subscription anytime before {{accessEndDate}}.</p>
+        </div>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="{{reactivateUrl}}" style="background-color: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Reactivate Subscription</a>
+        </div>
+        <p style="color: #666; font-size: 14px;">We're sorry to see you go. If you have feedback on how we can improve, we'd love to hear it.</p>
+        <p>Best regards,<br>The Angel Investing Marketplace Team</p>
+      </div>
+    `,
+    text: 'Your {{planName}} subscription has been canceled. You will have access until {{accessEndDate}}. Reactivate anytime: {{reactivateUrl}}',
+  },
+
+  // Subscription reactivated
+  subscriptionReactivated: {
+    subject: 'Welcome Back! Your {{planName}} Subscription is Active',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #28a745;">Welcome Back! 🎉</h1>
+        <p>Hi {{name}},</p>
+        <p>Great news! Your <strong>{{planName}}</strong> subscription has been reactivated.</p>
+        <div style="background-color: #d4edda; border: 2px solid #28a745; padding: 20px; border-radius: 5px; margin: 20px 0;">
+          <h3 style="margin-top: 0; color: #28a745;">Subscription Reactivated ✓</h3>
+          <p style="margin: 5px 0;"><strong>Plan:</strong> {{planName}}</p>
+          <p style="margin: 5px 0;"><strong>Price:</strong> {{price}}</p>
+          <p style="margin: 5px 0;"><strong>Next Billing Date:</strong> {{nextBillingDate}}</p>
+        </div>
+        <p>You now have full access to all {{planName}} features again. Your subscription will continue automatically until you decide to cancel.</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="{{dashboardUrl}}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Go to Dashboard</a>
+        </div>
+        <p>We're glad to have you back!</p>
+        <p>Best regards,<br>The Angel Investing Marketplace Team</p>
+      </div>
+    `,
+    text: 'Welcome back! Your {{planName}} subscription has been reactivated. Price: {{price}}. Next billing: {{nextBillingDate}}.',
+  },
 };
 
 // Email utility functions
@@ -410,6 +641,203 @@ export const sendSecurityAlert = async (
   });
 };
 
+// ============================================================================
+// SUBSCRIPTION EMAIL CONVENIENCE FUNCTIONS
+// ============================================================================
+
+export const sendTrialStartedEmail = async (
+  to: string,
+  name: string,
+  planName: string,
+  trialDays: number,
+  trialEndDate: string,
+  price: string,
+  features: string,
+  dashboardUrl: string
+): Promise<void> => {
+  await queueEmail({
+    to,
+    template: 'trialStarted',
+    templateData: {
+      name,
+      planName,
+      trialDays,
+      trialEndDate,
+      price,
+      features,
+      dashboardUrl,
+    },
+  });
+};
+
+export const sendTrialEndingSoonEmail = async (
+  to: string,
+  name: string,
+  planName: string,
+  daysLeft: number,
+  trialEndDate: string,
+  price: string,
+  nextBillingDate: string,
+  paymentMethod: string,
+  manageSubscriptionUrl: string,
+  pricingUrl: string
+): Promise<void> => {
+  await queueEmail({
+    to,
+    template: 'trialEndingSoon',
+    templateData: {
+      name,
+      planName,
+      daysLeft,
+      trialEndDate,
+      price,
+      nextBillingDate,
+      paymentMethod,
+      manageSubscriptionUrl,
+      pricingUrl,
+    },
+  });
+};
+
+export const sendTrialEndedEmail = async (
+  to: string,
+  name: string,
+  planName: string,
+  price: string,
+  nextBillingDate: string,
+  paymentMethod: string,
+  dashboardUrl: string
+): Promise<void> => {
+  await queueEmail({
+    to,
+    template: 'trialEnded',
+    templateData: {
+      name,
+      planName,
+      price,
+      nextBillingDate,
+      paymentMethod,
+      dashboardUrl,
+    },
+  });
+};
+
+export const sendPaymentSuccessfulEmail = async (
+  to: string,
+  name: string,
+  planName: string,
+  amount: string,
+  paymentDate: string,
+  billingPeriod: string,
+  paymentMethod: string,
+  nextBillingDate: string,
+  invoiceUrl: string
+): Promise<void> => {
+  await queueEmail({
+    to,
+    template: 'paymentSuccessful',
+    templateData: {
+      name,
+      planName,
+      amount,
+      paymentDate,
+      billingPeriod,
+      paymentMethod,
+      nextBillingDate,
+      invoiceUrl,
+    },
+  });
+};
+
+export const sendPaymentFailedEmail = async (
+  to: string,
+  name: string,
+  planName: string,
+  amount: string,
+  paymentMethod: string,
+  failureReason: string,
+  updatePaymentUrl: string
+): Promise<void> => {
+  await queueEmail({
+    to,
+    template: 'paymentFailed',
+    templateData: {
+      name,
+      planName,
+      amount,
+      paymentMethod,
+      failureReason,
+      updatePaymentUrl,
+    },
+    priority: 'high',
+  });
+};
+
+export const sendUpcomingPaymentEmail = async (
+  to: string,
+  name: string,
+  planName: string,
+  amount: string,
+  billingDate: string,
+  paymentMethod: string,
+  manageSubscriptionUrl: string
+): Promise<void> => {
+  await queueEmail({
+    to,
+    template: 'upcomingPayment',
+    templateData: {
+      name,
+      planName,
+      amount,
+      billingDate,
+      paymentMethod,
+      manageSubscriptionUrl,
+    },
+  });
+};
+
+export const sendSubscriptionCanceledEmail = async (
+  to: string,
+  name: string,
+  planName: string,
+  accessEndDate: string,
+  canceledDate: string,
+  reactivateUrl: string
+): Promise<void> => {
+  await queueEmail({
+    to,
+    template: 'subscriptionCanceled',
+    templateData: {
+      name,
+      planName,
+      accessEndDate,
+      canceledDate,
+      reactivateUrl,
+    },
+  });
+};
+
+export const sendSubscriptionReactivatedEmail = async (
+  to: string,
+  name: string,
+  planName: string,
+  price: string,
+  nextBillingDate: string,
+  dashboardUrl: string
+): Promise<void> => {
+  await queueEmail({
+    to,
+    template: 'subscriptionReactivated',
+    templateData: {
+      name,
+      planName,
+      price,
+      nextBillingDate,
+      dashboardUrl,
+    },
+  });
+};
+
 export default {
   transporter: emailTransporter,
   templates: emailTemplates,
@@ -421,4 +849,13 @@ export default {
   sendInvestmentNotification,
   sendStartupPitchNotification,
   sendSecurityAlert,
+  // Subscription emails
+  sendTrialStarted: sendTrialStartedEmail,
+  sendTrialEndingSoon: sendTrialEndingSoonEmail,
+  sendTrialEnded: sendTrialEndedEmail,
+  sendPaymentSuccessful: sendPaymentSuccessfulEmail,
+  sendPaymentFailed: sendPaymentFailedEmail,
+  sendUpcomingPayment: sendUpcomingPaymentEmail,
+  sendSubscriptionCanceled: sendSubscriptionCanceledEmail,
+  sendSubscriptionReactivated: sendSubscriptionReactivatedEmail,
 };

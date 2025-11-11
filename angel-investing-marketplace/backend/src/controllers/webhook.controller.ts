@@ -4,6 +4,16 @@ import { stripe } from '../config/stripe.js';
 import StripeService from '../services/stripe.service.js';
 import { logger } from '../config/logger.js';
 import { PrismaClient } from '@prisma/client';
+import {
+  sendTrialStartedEmail,
+  sendTrialEndingSoonEmail,
+  sendTrialEndedEmail,
+  sendPaymentSuccessfulEmail,
+  sendPaymentFailedEmail,
+  sendUpcomingPaymentEmail,
+  sendSubscriptionCanceledEmail,
+  sendSubscriptionReactivatedEmail,
+} from '../config/email.js';
 
 const prisma = new PrismaClient();
 
@@ -20,6 +30,43 @@ const prisma = new PrismaClient();
  * - payment_method.attached
  * - payment_method.detached
  */
+
+// Helper functions for email data formatting
+const formatDate = (date: Date): string => {
+  return new Date(date).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+};
+
+const formatPrice = (amount: number, currency: string = 'USD'): string => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency.toUpperCase(),
+  }).format(amount);
+};
+
+const formatPaymentMethod = (paymentMethod: any): string => {
+  if (!paymentMethod) return 'No payment method';
+  if (paymentMethod.card) {
+    return `${paymentMethod.card.brand} ending in ${paymentMethod.card.last4}`;
+  }
+  if (paymentMethod.type) {
+    return paymentMethod.type.replace('_', ' ').toUpperCase();
+  }
+  return 'Payment method on file';
+};
+
+const calculateDaysLeft = (endDate: Date): number => {
+  const now = new Date();
+  const diffMs = new Date(endDate).getTime() - now.getTime();
+  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+};
+
+const getAppUrl = (): string => {
+  return process.env.FRONTEND_URL || process.env.APP_URL || 'http://localhost:5173';
+};
 
 export class WebhookController {
   /**
@@ -199,6 +246,39 @@ export class WebhookController {
         userId: user.id,
         subscriptionId: subscription.id,
       });
+
+      // Send trial started email if this is a trial subscription
+      if (subscription.status === 'trialing' && trialEnd) {
+        try {
+          const appUrl = getAppUrl();
+          const billingInterval = subscription.items.data[0]?.price.recurring?.interval || 'month';
+          const priceAmount = subscription.items.data[0]?.price.unit_amount || 0;
+
+          // Format plan features as HTML list items
+          const features = plan.features
+            ? Object.entries(plan.features)
+                .filter(([_, value]) => value === true)
+                .map(([key]) => `<li>${key.replace(/([A-Z])/g, ' $1').trim()}</li>`)
+                .join('')
+            : '<li>All features included</li>';
+
+          await sendTrialStartedEmail(
+            user.email,
+            user.name || user.email,
+            plan.name,
+            plan.trialDays || 14,
+            formatDate(trialEnd),
+            formatPrice(priceAmount / 100) + '/' + billingInterval,
+            features,
+            `${appUrl}/dashboard`
+          );
+
+          logger.info('Trial started email sent', { userId: user.id, planName: plan.name });
+        } catch (emailError) {
+          logger.error('Failed to send trial started email', { error: emailError, userId: user.id });
+          // Don't throw - email failure shouldn't break the webhook
+        }
+      }
     } catch (error) {
       logger.error('Error handling subscription created', { error, subscriptionId: subscription.id });
       throw error;
@@ -231,6 +311,19 @@ export class WebhookController {
 
       logger.info('Subscription updated in database', { subscriptionId: subscription.id });
 
+      // Get subscription from database with user and plan details
+      const dbSubscription = await prisma.subscription.findUnique({
+        where: { stripeSubscriptionId: subscription.id },
+        include: { user: true, plan: true },
+      });
+
+      if (!dbSubscription) {
+        logger.warn('Subscription not found in database', { subscriptionId: subscription.id });
+        return;
+      }
+
+      const appUrl = getAppUrl();
+
       // If subscription was canceled, handle cancellation logic
       if (subscription.status === 'canceled' || subscription.cancel_at_period_end) {
         logger.info('Subscription canceled or will cancel', {
@@ -238,8 +331,54 @@ export class WebhookController {
           cancelAtPeriodEnd: subscription.cancel_at_period_end,
         });
 
-        // TODO: Send cancellation email
-        // TODO: Track in analytics
+        // Send cancellation email
+        if (subscription.cancel_at_period_end && subscription.status !== 'canceled') {
+          try {
+            await sendSubscriptionCanceledEmail(
+              dbSubscription.user.email,
+              dbSubscription.user.name || dbSubscription.user.email,
+              dbSubscription.plan.name,
+              formatDate(currentPeriodEnd),
+              formatDate(new Date()),
+              `${appUrl}/settings/subscription`
+            );
+
+            logger.info('Subscription canceled email sent', { userId: dbSubscription.userId });
+          } catch (emailError) {
+            logger.error('Failed to send subscription canceled email', { error: emailError });
+          }
+        }
+      }
+
+      // If subscription was reactivated (cancel_at_period_end changed from true to false)
+      if (!subscription.cancel_at_period_end && subscription.status === 'active') {
+        // Check if this was a reactivation
+        const wasScheduledForCancellation = await prisma.subscription.findFirst({
+          where: {
+            id: dbSubscription.id,
+            cancelAtPeriodEnd: true,
+          },
+        });
+
+        if (wasScheduledForCancellation) {
+          try {
+            const billingInterval = subscription.items.data[0]?.price.recurring?.interval || 'month';
+            const priceAmount = subscription.items.data[0]?.price.unit_amount || 0;
+
+            await sendSubscriptionReactivatedEmail(
+              dbSubscription.user.email,
+              dbSubscription.user.name || dbSubscription.user.email,
+              dbSubscription.plan.name,
+              formatPrice(priceAmount / 100) + '/' + billingInterval,
+              formatDate(currentPeriodEnd),
+              `${appUrl}/dashboard`
+            );
+
+            logger.info('Subscription reactivated email sent', { userId: dbSubscription.userId });
+          } catch (emailError) {
+            logger.error('Failed to send subscription reactivated email', { error: emailError });
+          }
+        }
       }
 
       // If subscription went from trialing to active
@@ -248,8 +387,40 @@ export class WebhookController {
           subscriptionId: subscription.id,
         });
 
-        // TODO: Send welcome email
-        // TODO: Track conversion in analytics
+        // Send trial ended / subscription activated email
+        try {
+          const billingInterval = subscription.items.data[0]?.price.recurring?.interval || 'month';
+          const priceAmount = subscription.items.data[0]?.price.unit_amount || 0;
+
+          // Get default payment method
+          const customer = await stripe.customers.retrieve(subscription.customer as string);
+          const paymentMethodId =
+            (customer as Stripe.Customer).invoice_settings?.default_payment_method;
+          let paymentMethodDescription = 'Payment method on file';
+
+          if (paymentMethodId) {
+            try {
+              const pm = await stripe.paymentMethods.retrieve(paymentMethodId as string);
+              paymentMethodDescription = formatPaymentMethod(pm);
+            } catch (pmError) {
+              logger.warn('Failed to retrieve payment method details', { error: pmError });
+            }
+          }
+
+          await sendTrialEndedEmail(
+            dbSubscription.user.email,
+            dbSubscription.user.name || dbSubscription.user.email,
+            dbSubscription.plan.name,
+            formatPrice(priceAmount / 100) + '/' + billingInterval,
+            formatDate(currentPeriodEnd),
+            paymentMethodDescription,
+            `${appUrl}/dashboard`
+          );
+
+          logger.info('Trial ended email sent', { userId: dbSubscription.userId });
+        } catch (emailError) {
+          logger.error('Failed to send trial ended email', { error: emailError });
+        }
       }
     } catch (error) {
       logger.error('Error handling subscription updated', { error, subscriptionId: subscription.id });
@@ -309,8 +480,50 @@ export class WebhookController {
         trialEnd: sub.trialEnd,
       });
 
-      // TODO: Send trial ending email
-      // TODO: Prompt to add payment method if not added
+      // Send trial ending soon email
+      try {
+        if (!sub.trialEnd) {
+          logger.warn('Trial end date not found', { subscriptionId: subscription.id });
+          return;
+        }
+
+        const appUrl = getAppUrl();
+        const daysLeft = calculateDaysLeft(sub.trialEnd);
+        const billingInterval = subscription.items.data[0]?.price.recurring?.interval || 'month';
+        const priceAmount = subscription.items.data[0]?.price.unit_amount || 0;
+
+        // Get default payment method
+        const customer = await stripe.customers.retrieve(subscription.customer as string);
+        const paymentMethodId =
+          (customer as Stripe.Customer).invoice_settings?.default_payment_method;
+        let paymentMethodDescription = 'No payment method on file';
+
+        if (paymentMethodId) {
+          try {
+            const pm = await stripe.paymentMethods.retrieve(paymentMethodId as string);
+            paymentMethodDescription = formatPaymentMethod(pm);
+          } catch (pmError) {
+            logger.warn('Failed to retrieve payment method details', { error: pmError });
+          }
+        }
+
+        await sendTrialEndingSoonEmail(
+          sub.user.email,
+          sub.user.name || sub.user.email,
+          sub.plan.name,
+          daysLeft,
+          formatDate(sub.trialEnd),
+          formatPrice(priceAmount / 100) + '/' + billingInterval,
+          formatDate(sub.currentPeriodEnd),
+          paymentMethodDescription,
+          `${appUrl}/settings/subscription`,
+          `${appUrl}/pricing`
+        );
+
+        logger.info('Trial ending soon email sent', { userId: sub.userId });
+      } catch (emailError) {
+        logger.error('Failed to send trial ending soon email', { error: emailError });
+      }
     } catch (error) {
       logger.error('Error handling trial will end', { error, subscriptionId: subscription.id });
       throw error;
@@ -363,7 +576,59 @@ export class WebhookController {
         amount: invoice.amount_paid / 100,
       });
 
-      // TODO: Send payment receipt email
+      // Send payment receipt email
+      try {
+        const appUrl = getAppUrl();
+        const billingInterval = invoice.lines.data[0]?.price?.recurring?.interval || 'month';
+
+        // Get default payment method
+        const customer = await stripe.customers.retrieve(invoice.customer as string);
+        const paymentMethodId =
+          (customer as Stripe.Customer).invoice_settings?.default_payment_method ||
+          invoice.payment_intent?.payment_method;
+        let paymentMethodDescription = 'Payment method on file';
+
+        if (paymentMethodId) {
+          try {
+            const pm = await stripe.paymentMethods.retrieve(paymentMethodId as string);
+            paymentMethodDescription = formatPaymentMethod(pm);
+          } catch (pmError) {
+            logger.warn('Failed to retrieve payment method details', { error: pmError });
+          }
+        }
+
+        const billingPeriodStart = invoice.period_start
+          ? formatDate(new Date(invoice.period_start * 1000))
+          : '';
+        const billingPeriodEnd = invoice.period_end
+          ? formatDate(new Date(invoice.period_end * 1000))
+          : '';
+        const billingPeriod = `${billingPeriodStart} - ${billingPeriodEnd}`;
+
+        // Get next billing date (approximation)
+        const nextBillingDate = new Date(invoice.period_end! * 1000);
+        if (billingInterval === 'month') {
+          nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
+        } else if (billingInterval === 'year') {
+          nextBillingDate.setFullYear(nextBillingDate.getFullYear() + 1);
+        }
+
+        await sendPaymentSuccessfulEmail(
+          subscription.user.email,
+          subscription.user.name || subscription.user.email,
+          subscription.plan.name,
+          formatPrice(invoice.amount_paid / 100, invoice.currency),
+          formatDate(new Date(invoice.status_transitions.paid_at! * 1000)),
+          billingPeriod,
+          paymentMethodDescription,
+          formatDate(nextBillingDate),
+          invoice.hosted_invoice_url || `${appUrl}/settings/subscription`
+        );
+
+        logger.info('Payment successful email sent', { userId: subscription.userId });
+      } catch (emailError) {
+        logger.error('Failed to send payment successful email', { error: emailError });
+      }
     } catch (error) {
       logger.error('Error handling invoice paid', { error, invoiceId: invoice.id });
       throw error;
@@ -407,9 +672,45 @@ export class WebhookController {
         invoiceId: invoice.id,
       });
 
-      // TODO: Send payment failed email
-      // TODO: Prompt to update payment method
-      // TODO: Track in analytics
+      // Send payment failed email
+      try {
+        const appUrl = getAppUrl();
+
+        // Get default payment method
+        const customer = await stripe.customers.retrieve(invoice.customer as string);
+        const paymentMethodId =
+          (customer as Stripe.Customer).invoice_settings?.default_payment_method ||
+          invoice.payment_intent?.payment_method;
+        let paymentMethodDescription = 'Payment method on file';
+
+        if (paymentMethodId) {
+          try {
+            const pm = await stripe.paymentMethods.retrieve(paymentMethodId as string);
+            paymentMethodDescription = formatPaymentMethod(pm);
+          } catch (pmError) {
+            logger.warn('Failed to retrieve payment method details', { error: pmError });
+          }
+        }
+
+        // Get failure reason
+        const failureReason =
+          invoice.last_finalization_error?.message ||
+          'Your payment could not be processed. Please check your payment method and try again.';
+
+        await sendPaymentFailedEmail(
+          subscription.user.email,
+          subscription.user.name || subscription.user.email,
+          subscription.plan.name,
+          formatPrice(invoice.amount_due / 100, invoice.currency),
+          paymentMethodDescription,
+          failureReason,
+          `${appUrl}/settings/subscription`
+        );
+
+        logger.info('Payment failed email sent', { userId: subscription.userId });
+      } catch (emailError) {
+        logger.error('Failed to send payment failed email', { error: emailError });
+      }
     } catch (error) {
       logger.error('Error handling invoice payment failed', { error, invoiceId: invoice.id });
       throw error;
@@ -442,7 +743,44 @@ export class WebhookController {
         amount: invoice.amount_due / 100,
       });
 
-      // TODO: Send upcoming payment email
+      // Send upcoming payment email
+      try {
+        const appUrl = getAppUrl();
+
+        // Get default payment method
+        const customer = await stripe.customers.retrieve(invoice.customer as string);
+        const paymentMethodId =
+          (customer as Stripe.Customer).invoice_settings?.default_payment_method;
+        let paymentMethodDescription = 'Payment method on file';
+
+        if (paymentMethodId) {
+          try {
+            const pm = await stripe.paymentMethods.retrieve(paymentMethodId as string);
+            paymentMethodDescription = formatPaymentMethod(pm);
+          } catch (pmError) {
+            logger.warn('Failed to retrieve payment method details', { error: pmError });
+          }
+        }
+
+        // Calculate billing date (when payment will be attempted)
+        const billingDate = invoice.next_payment_attempt
+          ? formatDate(new Date(invoice.next_payment_attempt * 1000))
+          : formatDate(new Date(invoice.period_end! * 1000));
+
+        await sendUpcomingPaymentEmail(
+          subscription.user.email,
+          subscription.user.name || subscription.user.email,
+          subscription.plan.name,
+          formatPrice(invoice.amount_due / 100, invoice.currency),
+          billingDate,
+          paymentMethodDescription,
+          `${appUrl}/settings/subscription`
+        );
+
+        logger.info('Upcoming payment email sent', { userId: subscription.userId });
+      } catch (emailError) {
+        logger.error('Failed to send upcoming payment email', { error: emailError });
+      }
     } catch (error) {
       logger.error('Error handling upcoming invoice', { error, invoiceId: invoice.id });
       throw error;
