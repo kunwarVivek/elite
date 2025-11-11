@@ -1,6 +1,7 @@
 import express from 'express';
 import { equityRoundController } from '../controllers/equity-round.controller.js';
 import { authenticate } from '../middleware/auth.js';
+import { featureGate, usageLimit, trackUsageAfter } from '../middleware/feature-gate.middleware.js';
 
 const router = express.Router();
 
@@ -10,9 +11,13 @@ router.use(authenticate);
 /**
  * @route   POST /api/equity-rounds
  * @desc    Create a new equity round
- * @access  Private (Founder/Admin)
+ * @access  Private (Founder/Admin) - Requires Pro tier or higher
  */
-router.post('/', equityRoundController.createEquityRound.bind(equityRoundController));
+router.post(
+  '/',
+  featureGate('capTableManagement'),
+  equityRoundController.createEquityRound.bind(equityRoundController)
+);
 
 /**
  * @route   GET /api/equity-rounds/active
@@ -52,15 +57,24 @@ router.post('/:id/close', equityRoundController.closeEquityRound.bind(equityRoun
 /**
  * @route   GET /api/equity-rounds/:id/metrics
  * @desc    Get round metrics
- * @access  Private
+ * @access  Private - Requires Pro tier or higher for advanced analytics
  */
-router.get('/:id/metrics', equityRoundController.getRoundMetrics.bind(equityRoundController));
+router.get(
+  '/:id/metrics',
+  featureGate('portfolioAnalytics'),
+  equityRoundController.getRoundMetrics.bind(equityRoundController)
+);
 
 /**
  * @route   POST /api/equity-rounds/:id/investments
  * @desc    Record investment in round
- * @access  Private (Founder/Admin)
+ * @access  Private (Founder/Admin) - Tracks investment usage
  */
-router.post('/:id/investments', equityRoundController.recordInvestment.bind(equityRoundController));
+router.post(
+  '/:id/investments',
+  usageLimit('investments'),
+  equityRoundController.recordInvestment.bind(equityRoundController),
+  trackUsageAfter('investments', 1)
+);
 
 export default router;

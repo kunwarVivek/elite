@@ -1,6 +1,7 @@
 import express from 'express';
 import { investorRightsController } from '../controllers/investor-rights.controller.js';
 import { authenticate } from '../middleware/auth.js';
+import { featureGate } from '../middleware/feature-gate.middleware.js';
 
 const router = express.Router();
 
@@ -10,9 +11,13 @@ router.use(authenticate);
 /**
  * @route   POST /api/investor-rights
  * @desc    Create investor rights
- * @access  Private (Founder/Admin)
+ * @access  Private (Founder/Admin) - Requires Pro tier or higher
  */
-router.post('/', investorRightsController.createInvestorRights.bind(investorRightsController));
+router.post(
+  '/',
+  featureGate('capTableManagement'),
+  investorRightsController.createInvestorRights.bind(investorRightsController)
+);
 
 /**
  * @route   GET /api/investor-rights/:id
@@ -59,9 +64,13 @@ router.put('/:id', investorRightsController.updateInvestorRights.bind(investorRi
 /**
  * @route   POST /api/investor-rights/:id/exercise-pro-rata
  * @desc    Exercise pro-rata right
- * @access  Private (Investor/Admin)
+ * @access  Private (Investor/Admin) - Requires Pro tier or higher
  */
-router.post('/:id/exercise-pro-rata', investorRightsController.exerciseProRataRight.bind(investorRightsController));
+router.post(
+  '/:id/exercise-pro-rata',
+  featureGate('capTableManagement'),
+  investorRightsController.exerciseProRataRight.bind(investorRightsController)
+);
 
 /**
  * @route   POST /api/investor-rights/:id/waive

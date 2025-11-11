@@ -1,6 +1,7 @@
 import express from 'express';
 import { exitManagementController } from '../controllers/exit-management.controller.js';
 import { authenticate } from '../middleware/auth.js';
+import { featureGate, requireTier } from '../middleware/feature-gate.middleware.js';
 
 const router = express.Router();
 
@@ -10,9 +11,13 @@ router.use(authenticate);
 /**
  * @route   POST /api/exit-events
  * @desc    Create exit event
- * @access  Private (Founder/Admin)
+ * @access  Private (Founder/Admin) - Requires Pro tier or higher
  */
-router.post('/', exitManagementController.createExitEvent.bind(exitManagementController));
+router.post(
+  '/',
+  featureGate('capTableManagement'),
+  exitManagementController.createExitEvent.bind(exitManagementController)
+);
 
 /**
  * @route   GET /api/exit-events
@@ -52,16 +57,26 @@ router.put('/:id', exitManagementController.updateExitEvent.bind(exitManagementC
 /**
  * @route   GET /api/exit-events/:id/calculate-distributions
  * @desc    Calculate exit distributions
- * @access  Private
+ * @access  Private - Requires Growth tier or higher for waterfall analysis
  */
-router.get('/:id/calculate-distributions', exitManagementController.calculateDistributions.bind(exitManagementController));
+router.get(
+  '/:id/calculate-distributions',
+  featureGate('waterfallAnalysis'),
+  requireTier('GROWTH'),
+  exitManagementController.calculateDistributions.bind(exitManagementController)
+);
 
 /**
  * @route   POST /api/exit-events/:id/distributions
  * @desc    Create distribution
- * @access  Private (Founder/Admin)
+ * @access  Private (Founder/Admin) - Requires Growth tier or higher
  */
-router.post('/:id/distributions', exitManagementController.createDistribution.bind(exitManagementController));
+router.post(
+  '/:id/distributions',
+  featureGate('waterfallAnalysis'),
+  requireTier('GROWTH'),
+  exitManagementController.createDistribution.bind(exitManagementController)
+);
 
 /**
  * @route   GET /api/exit-events/:id/distributions

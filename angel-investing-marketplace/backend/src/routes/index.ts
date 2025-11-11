@@ -31,6 +31,7 @@ import equityRoundRoutes from './equity-round.routes.js';
 import termSheetRoutes from './term-sheet.routes.js';
 import investorRightsRoutes from './investor-rights.routes.js';
 import exitManagementRoutes from './exit-management.routes.js';
+import { subscriptionRouter, subscriptionPlansRouter } from './subscription.routes.js';
 
 // Create main router
 const router = Router();
@@ -80,6 +81,8 @@ router.get('/', (req, res) => {
         termSheets: '/api/term-sheets',
         investorRights: '/api/investor-rights',
         exitEvents: '/api/exit-events',
+        subscriptions: '/api/subscriptions',
+        subscriptionPlans: '/api/subscription-plans',
       },
     },
   });
@@ -117,6 +120,8 @@ router.use('/equity-rounds', apiVersion('v1'), equityRoundRoutes);
 router.use('/term-sheets', apiVersion('v1'), termSheetRoutes);
 router.use('/investor-rights', apiVersion('v1'), investorRightsRoutes);
 router.use('/exit-events', apiVersion('v1'), exitManagementRoutes);
+router.use('/subscriptions', apiVersion('v1'), subscriptionRouter);
+router.use('/subscription-plans', apiVersion('v1'), subscriptionPlansRouter);
 
 // API documentation endpoint (placeholder)
 router.get('/docs', (req, res) => {
