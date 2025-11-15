@@ -73,6 +73,20 @@ model User {
   // Subscription relations
   subscriptions             Subscription[]
   paymentMethods            PaymentMethod[]
+  // Forum relations
+  forumTopics               ForumTopic[]          @relation("ForumTopicAuthor")
+  forumPosts                ForumPost[]           @relation("ForumPostAuthor")
+  // Investment Club relations
+  ledClubs                  InvestmentClub[]      @relation("ClubLeader")
+  clubMemberships           ClubMember[]          @relation("ClubMemberships")
+  // Reputation relations
+  reputation                UserReputation?       @relation("UserReputation")
+  // API Key relations
+  apiKeys                   ApiKey[]              @relation("UserApiKeys")
+  // Support Ticket relations
+  tickets                   SupportTicket[]       @relation("UserTickets")
+  assignedTickets           SupportTicket[]       @relation("AssignedTickets")
+  ticketMessages            TicketMessage[]       @relation("TicketMessages")
 
   // Indexes
   @@index([email])
@@ -530,9 +544,13 @@ model Document {
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 
-  startup  Startup @relation(fields: [startupId], references: [id], onDelete: Cascade)
-  pitch    Pitch?  @relation(fields: [pitchId], references: [id], onDelete: Cascade)
-  uploader User    @relation("DocumentUploader", fields: [uploadedBy], references: [id])
+  startup            Startup                   @relation(fields: [startupId], references: [id], onDelete: Cascade)
+  pitch              Pitch?                    @relation(fields: [pitchId], references: [id], onDelete: Cascade)
+  uploader           User                      @relation("DocumentUploader", fields: [uploadedBy], references: [id])
+  accessGrants       DocumentAccess[]
+  versions           DocumentVersion[]
+  activities         DocumentActivity[]
+  documentSignatures DocumentSignatureRecord[]
 
   // Indexes
   @@index([startupId])
@@ -545,6 +563,104 @@ model Document {
   @@index([expiryDate])
   @@index([createdAt])
   @@map("documents")
+}
+
+model DocumentAccess {
+  id                String    @id @default(cuid())
+  documentId        String
+  userId            String
+  grantedBy         String
+  permission        String    @default("VIEW") // VIEW, DOWNLOAD, EDIT
+  expiryDate        DateTime?
+  message           String?
+  requireAcceptance Boolean   @default(false)
+  accepted          Boolean   @default(false)
+  acceptedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, userId])
+  @@index([documentId])
+  @@index([userId])
+  @@index([grantedBy])
+  @@index([expiryDate])
+  @@map("document_access")
+}
+
+model DocumentVersion {
+  id             String   @id @default(cuid())
+  documentId     String
+  version        Int
+  fileName       String
+  fileUrl        String
+  fileSize       Int
+  mimeType       String?
+  changelog      String?
+  isMajorVersion Boolean  @default(false)
+  createdBy      String
+  createdAt      DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, version])
+  @@index([documentId])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@map("document_versions")
+}
+
+model DocumentActivity {
+  id           String               @id @default(cuid())
+  documentId   String
+  userId       String?
+  activityType DocumentActivityType
+  metadata     Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime             @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([userId])
+  @@index([activityType])
+  @@index([createdAt])
+  @@map("document_activities")
+}
+
+model DocumentSignatureRecord {
+  id            String          @id @default(cuid())
+  documentId    String
+  signedBy      String
+  signatureData String?
+  signatureType String          @default("ELECTRONIC") // ELECTRONIC, DIGITAL, WET
+  signerName    String
+  signerTitle   String?
+  ipAddress     String?
+  location      Json?
+  signedAt      DateTime        @default(now())
+  status        SignatureStatus @default(SIGNED)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([signedBy])
+  @@index([status])
+  @@index([signedAt])
+  @@map("document_signature_records")
+}
+
+enum DocumentActivityType {
+  VIEW
+  DOWNLOAD
+  SHARE
+  EDIT
+  DELETE
+  VERSION_CREATE
 }
 
 // ============================================================================
@@ -1138,23 +1254,23 @@ model Verification {
 // ============================================================================
 
 model SubscriptionPlan {
-  id                String             @id @default(cuid())
-  name              String
-  slug              String             @unique
-  tier              PlanTier
-  price             Decimal            @db.Decimal(10, 2)
-  billingInterval   BillingInterval
-  features          Json // Feature flags and limits
-  limits            Json // Usage limits (investments, documents, etc.)
-  isActive          Boolean            @default(true)
-  trialDays         Int                @default(14)
-  stripePriceId     String?            @unique
-  stripeProductId   String?            @unique
-  displayOrder      Int                @default(0)
-  description       String?            @db.Text
-  highlightedText   String? // "Most Popular", "Best Value", etc.
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  id              String          @id @default(cuid())
+  name            String
+  slug            String          @unique
+  tier            PlanTier
+  price           Decimal         @db.Decimal(10, 2)
+  billingInterval BillingInterval
+  features        Json // Feature flags and limits
+  limits          Json // Usage limits (investments, documents, etc.)
+  isActive        Boolean         @default(true)
+  trialDays       Int             @default(14)
+  stripePriceId   String?         @unique
+  stripeProductId String?         @unique
+  displayOrder    Int             @default(0)
+  description     String?         @db.Text
+  highlightedText String? // "Most Popular", "Best Value", etc.
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
   subscriptions Subscription[]
 
@@ -1165,23 +1281,23 @@ model SubscriptionPlan {
 }
 
 model Subscription {
-  id                    String              @id @default(cuid())
+  id                    String             @id @default(cuid())
   userId                String
   planId                String
   status                SubscriptionStatus
   currentPeriodStart    DateTime
   currentPeriodEnd      DateTime
-  cancelAtPeriodEnd     Boolean             @default(false)
+  cancelAtPeriodEnd     Boolean            @default(false)
   canceledAt            DateTime?
   cancelReason          String?
-  stripeSubscriptionId  String?             @unique
+  stripeSubscriptionId  String?            @unique
   stripeCustomerId      String?
   stripePaymentMethodId String?
   trialStart            DateTime?
   trialEnd              DateTime?
   metadata              Json?
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
 
   user     User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   plan     SubscriptionPlan   @relation(fields: [planId], references: [id])
@@ -1227,20 +1343,20 @@ model Invoice {
 }
 
 model SubscriptionUsage {
-  id                   String   @id @default(cuid())
-  subscriptionId       String   @unique
-  investmentsCreated   Int      @default(0)
-  investmentsLimit     Int      @default(5)
-  documentsUploaded    Int      @default(0)
-  documentsLimit       Int      @default(100)
-  storageUsedMB        Float    @default(0)
-  storageLimitMB       Float    @default(100)
-  apiCallsCount        Int      @default(0)
-  apiCallsLimit        Int      @default(1000)
-  resetDate            DateTime
-  lastResetAt          DateTime
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  subscriptionId     String   @unique
+  investmentsCreated Int      @default(0)
+  investmentsLimit   Int      @default(5)
+  documentsUploaded  Int      @default(0)
+  documentsLimit     Int      @default(100)
+  storageUsedMB      Float    @default(0)
+  storageLimitMB     Float    @default(100)
+  apiCallsCount      Int      @default(0)
+  apiCallsLimit      Int      @default(1000)
+  resetDate          DateTime
+  lastResetAt        DateTime
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 
@@ -2066,15 +2182,19 @@ model TermSheetComment {
 model DocumentTemplate {
   id             String                   @id @default(cuid())
   name           String
+  documentType   String
   category       DocumentTemplateCategory
-  jurisdictions  String[]
-  version        String
+  jurisdictions  String[]                 @default([])
+  version        String                   @default("1.0")
   templateUrl    String
+  fileUrl        String?
   variableFields Json
   lawyerReviewed Boolean                  @default(false)
   reviewDate     DateTime?
+  isPublic       Boolean                  @default(false)
   isActive       Boolean                  @default(true)
   useCount       Int                      @default(0)
+  createdBy      String
   createdAt      DateTime                 @default(now())
   updatedAt      DateTime                 @updatedAt
 
@@ -2082,6 +2202,9 @@ model DocumentTemplate {
 
   @@index([category])
   @@index([isActive])
+  @@index([isPublic])
+  @@index([createdBy])
+  @@index([documentType])
   @@map("document_templates")
 }
 
@@ -2545,6 +2668,339 @@ enum InvoiceStatus {
   PAID
   VOID
   UNCOLLECTIBLE
+}
+
+// ============================================================================
+// DISCUSSION FORUMS & COMMUNITY
+// ============================================================================
+
+model Forum {
+  id           String        @id @default(cuid())
+  name         String
+  slug         String        @unique
+  description  String?
+  category     ForumCategory
+  icon         String?
+  isActive     Boolean       @default(true)
+  topicCount   Int           @default(0)
+  postCount    Int           @default(0)
+  displayOrder Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  topics ForumTopic[]
+
+  // Indexes
+  @@index([category])
+  @@index([isActive])
+  @@index([slug])
+  @@map("forums")
+}
+
+model ForumTopic {
+  id         String    @id @default(cuid())
+  forumId    String
+  userId     String
+  title      String
+  slug       String    @unique
+  isPinned   Boolean   @default(false)
+  isLocked   Boolean   @default(false)
+  isFeatured Boolean   @default(false)
+  viewCount  Int       @default(0)
+  replyCount Int       @default(0)
+  lastPostAt DateTime?
+  lastPostBy String?
+  tags       String[]  @default([])
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  forum Forum       @relation(fields: [forumId], references: [id], onDelete: Cascade)
+  user  User        @relation("ForumTopicAuthor", fields: [userId], references: [id])
+  posts ForumPost[]
+
+  // Indexes
+  @@index([forumId])
+  @@index([userId])
+  @@index([isPinned, lastPostAt])
+  @@index([createdAt])
+  @@index([slug])
+  @@map("forum_topics")
+}
+
+model ForumPost {
+  id               String    @id @default(cuid())
+  topicId          String
+  userId           String
+  parentPostId     String?
+  content          String    @db.Text
+  isEdited         Boolean   @default(false)
+  editedAt         DateTime?
+  isModerated      Boolean   @default(false)
+  moderatedBy      String?
+  moderatedAt      DateTime?
+  moderationReason String?
+  likesCount       Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  topic      ForumTopic  @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  user       User        @relation("ForumPostAuthor", fields: [userId], references: [id])
+  parentPost ForumPost?  @relation("ForumPostReplies", fields: [parentPostId], references: [id])
+  replies    ForumPost[] @relation("ForumPostReplies")
+
+  // Indexes
+  @@index([topicId])
+  @@index([userId])
+  @@index([parentPostId])
+  @@index([createdAt])
+  @@map("forum_posts")
+}
+
+// ============================================================================
+// INVESTMENT CLUBS
+// ============================================================================
+
+model InvestmentClub {
+  id                String   @id @default(cuid())
+  name              String
+  slug              String   @unique
+  description       String?
+  leaderId          String
+  isPrivate         Boolean  @default(true)
+  requiresApproval  Boolean  @default(true)
+  memberCount       Int      @default(0)
+  maxMembers        Int?
+  investmentFocus   String?
+  minimumInvestment Decimal? @db.Decimal(15, 2)
+  tags              String[] @default([])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  leader  User         @relation("ClubLeader", fields: [leaderId], references: [id])
+  members ClubMember[]
+
+  // Indexes
+  @@index([leaderId])
+  @@index([isPrivate])
+  @@index([slug])
+  @@map("investment_clubs")
+}
+
+model ClubMember {
+  id        String           @id @default(cuid())
+  clubId    String
+  userId    String
+  role      ClubMemberRole   @default(MEMBER)
+  status    ClubMemberStatus @default(PENDING)
+  joinedAt  DateTime?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  club InvestmentClub @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user User           @relation("ClubMemberships", fields: [userId], references: [id])
+
+  // Unique constraint - one membership per user per club
+  @@unique([clubId, userId])
+  @@index([clubId])
+  @@index([userId])
+  @@index([status])
+  @@map("club_members")
+}
+
+// ============================================================================
+// USER REPUTATION & ACHIEVEMENTS
+// ============================================================================
+
+model UserReputation {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  reputationScore   Int      @default(0)
+  level             Int      @default(1)
+  badges            Json     @default("[]") // Array of badge IDs
+  achievements      Json     @default("[]") // Array of achievement objects
+  contributionScore Int      @default(0)
+  investmentScore   Int      @default(0)
+  socialScore       Int      @default(0)
+  lastCalculatedAt  DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation("UserReputation", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([reputationScore])
+  @@index([level])
+  @@map("user_reputations")
+}
+
+model Badge {
+  id          String        @id @default(cuid())
+  name        String        @unique
+  slug        String        @unique
+  description String
+  icon        String
+  category    BadgeCategory
+  tier        BadgeTier
+  criteria    Json // Requirements to earn badge
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Indexes
+  @@index([category])
+  @@index([tier])
+  @@index([slug])
+  @@map("badges")
+}
+
+// ============================================================================
+// API KEY MANAGEMENT
+// ============================================================================
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  userId      String
+  name        String
+  keyHash     String    @unique // Hashed API key
+  keyPrefix   String // First 8 chars for identification
+  permissions Json      @default("{}") // Permission structure
+  rateLimit   Int       @default(1000) // Requests per hour
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation("UserApiKeys", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Indexes
+  @@index([userId])
+  @@index([keyHash])
+  @@index([keyPrefix])
+  @@index([expiresAt])
+  @@map("api_keys")
+}
+
+// ============================================================================
+// SUPPORT TICKET SYSTEM
+// ============================================================================
+
+model SupportTicket {
+  id          String         @id @default(cuid())
+  userId      String
+  subject     String
+  description String         @db.Text
+  status      TicketStatus   @default(OPEN)
+  priority    TicketPriority @default(MEDIUM)
+  category    TicketCategory @default(GENERAL)
+  assignedTo  String?
+  closedAt    DateTime?
+  closedBy    String?
+  tags        String[]       @default([])
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  user     User            @relation("UserTickets", fields: [userId], references: [id])
+  assignee User?           @relation("AssignedTickets", fields: [assignedTo], references: [id])
+  messages TicketMessage[]
+
+  // Indexes
+  @@index([userId])
+  @@index([status])
+  @@index([priority])
+  @@index([assignedTo])
+  @@index([category])
+  @@index([createdAt])
+  @@map("support_tickets")
+}
+
+model TicketMessage {
+  id          String   @id @default(cuid())
+  ticketId    String
+  userId      String
+  content     String   @db.Text
+  isInternal  Boolean  @default(false) // Staff-only notes
+  attachments Json?    @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user   User          @relation("TicketMessages", fields: [userId], references: [id])
+
+  // Indexes
+  @@index([ticketId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("ticket_messages")
+}
+
+// ============================================================================
+// NEW ENUMS FOR ADDED MODELS
+// ============================================================================
+
+enum ForumCategory {
+  GENERAL
+  STARTUPS
+  INVESTING
+  LEGAL
+  TAX
+  TECHNICAL
+  ANNOUNCEMENTS
+}
+
+enum ClubMemberRole {
+  LEADER
+  CO_LEADER
+  MEMBER
+}
+
+enum ClubMemberStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REMOVED
+}
+
+enum BadgeCategory {
+  INVESTMENT
+  CONTRIBUTION
+  EXPERTISE
+  MILESTONE
+  SPECIAL
+}
+
+enum BadgeTier {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+  DIAMOND
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_ON_USER
+  WAITING_ON_STAFF
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketCategory {
+  GENERAL
+  TECHNICAL
+  BILLING
+  COMPLIANCE
+  FEATURE_REQUEST
+  BUG_REPORT
+  ACCOUNT
 }
 
 // ============================================================================

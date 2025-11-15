@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { portfolioController } from '../controllers/portfolio.controller.js';
+import { portfolioAnalyticsController } from '../controllers/portfolio-analytics.controller.js';
 import { authenticate } from '../middleware/auth.js';
 import { validateBody, validateParams } from '../middleware/validation.js';
 import {
@@ -57,5 +58,24 @@ router.post('/:id/exit', validateBody(exitInvestmentSchema), portfolioController
 
 // Portfolio analytics
 router.post('/:id/analytics', validateBody(portfolioAnalyticsSchema), portfolioController.getPortfolioAnalytics.bind(portfolioController));
+
+// ============================================================================
+// PORTFOLIO ANALYTICS ROUTES (NEW)
+// ============================================================================
+
+// Get all performance metrics (IRR, MOIC, Sharpe Ratio, etc.)
+router.get('/:id/analytics/performance', portfolioAnalyticsController.getPerformanceMetrics.bind(portfolioAnalyticsController));
+
+// Get benchmark comparisons (S&P 500, NASDAQ, peers, sectors)
+router.get('/:id/analytics/benchmarks', portfolioAnalyticsController.getBenchmarkComparisons.bind(portfolioAnalyticsController));
+
+// Get risk metrics and analysis
+router.get('/:id/analytics/risk-metrics', portfolioAnalyticsController.getRiskMetrics.bind(portfolioAnalyticsController));
+
+// Get historical snapshots and trends
+router.get('/:id/analytics/historical', portfolioAnalyticsController.getHistoricalSnapshots.bind(portfolioAnalyticsController));
+
+// Create snapshot (admin only) - moved to root level
+router.post('/analytics/snapshot', portfolioAnalyticsController.createSnapshot.bind(portfolioAnalyticsController));
 
 export default router;

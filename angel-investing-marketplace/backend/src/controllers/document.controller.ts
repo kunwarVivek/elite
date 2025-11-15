@@ -3,6 +3,7 @@ import { AppError } from '../middleware/errorHandler.js';
 import { sendSuccess } from '../utils/response.js';
 import { logger } from '../config/logger.js';
 import { fileUploadService } from '../services/fileUploadService.js';
+import { prisma } from '../config/database.js';
 
 // Types for better type safety
 interface AuthRequest extends Request {
@@ -673,117 +674,710 @@ class DocumentController {
     return sizeMap[documentType] || 10 * 1024 * 1024; // 10MB default
   }
 
-  private async validateRelatedEntity(_relatedEntity: { type: string; id: string }) {
-    // TODO: Validate that the related entity exists
+  /**
+   * Validate that the related entity exists in the database
+   */
+  private async validateRelatedEntity(relatedEntity: { type: string; id: string }) {
+    if (!relatedEntity || !relatedEntity.type || !relatedEntity.id) {
+      return; // Optional validation
+    }
+
+    const { type, id } = relatedEntity;
+
+    try {
+      switch (type.toUpperCase()) {
+        case 'STARTUP':
+          const startup = await prisma.startup.findUnique({ where: { id } });
+          if (!startup) {
+            throw new AppError(`Startup with ID ${id} not found`, 404, 'RELATED_ENTITY_NOT_FOUND');
+          }
+          break;
+        case 'PITCH':
+          const pitch = await prisma.pitch.findUnique({ where: { id } });
+          if (!pitch) {
+            throw new AppError(`Pitch with ID ${id} not found`, 404, 'RELATED_ENTITY_NOT_FOUND');
+          }
+          break;
+        case 'INVESTMENT':
+          const investment = await prisma.investment.findUnique({ where: { id } });
+          if (!investment) {
+            throw new AppError(`Investment with ID ${id} not found`, 404, 'RELATED_ENTITY_NOT_FOUND');
+          }
+          break;
+        default:
+          logger.warn(`Unknown related entity type: ${type}`);
+      }
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      logger.error('Error validating related entity', { error, relatedEntity });
+      throw new AppError('Failed to validate related entity', 500, 'VALIDATION_ERROR');
+    }
   }
 
-  private async checkDocumentAccess(_documentId: string, _userId?: string): Promise<boolean> {
-    // TODO: Check if user has access to document
-    return true;
+  /**
+   * Check if user has access to document based on visibility and permissions
+   */
+  private async checkDocumentAccess(documentId: string, userId?: string): Promise<boolean> {
+    try {
+      const document = await prisma.document.findUnique({
+        where: { id: documentId },
+        include: {
+          accessGrants: {
+            where: {
+              userId: userId || '',
+              OR: [
+                { expiryDate: null },
+                { expiryDate: { gte: new Date() } }
+              ]
+            }
+          }
+        }
+      });
+
+      if (!document) {
+        return false;
+      }
+
+      // Public documents are accessible to all
+      if (document.isPublic || document.visibility === 'PUBLIC') {
+        return true;
+      }
+
+      // No user ID provided for private document
+      if (!userId) {
+        return false;
+      }
+
+      // Check if user is the uploader
+      if (document.uploadedBy === userId) {
+        return true;
+      }
+
+      // Check if user has been granted access
+      if (document.accessGrants.length > 0) {
+        return true;
+      }
+
+      // Check visibility rules
+      if (document.visibility === 'INVESTORS_ONLY') {
+        // Check if user is an investor in the related startup/pitch
+        if (document.pitchId) {
+          const investment = await prisma.investment.findFirst({
+            where: {
+              pitchId: document.pitchId,
+              investorId: userId
+            }
+          });
+          return !!investment;
+        }
+      }
+
+      return false;
+    } catch (error) {
+      logger.error('Error checking document access', { error, documentId, userId });
+      return false;
+    }
   }
 
-  private async trackDocumentView(_documentId: string, _viewData: any) {
-    // TODO: Track document view
+  /**
+   * Track document view activity
+   */
+  private async trackDocumentView(documentId: string, viewData: any) {
+    try {
+      await prisma.documentActivity.create({
+        data: {
+          documentId,
+          userId: viewData.userId,
+          activityType: 'VIEW',
+          metadata: {
+            userAgent: viewData.userAgent,
+            referrer: viewData.referrer
+          },
+          ipAddress: viewData.ipAddress,
+          userAgent: viewData.userAgent
+        }
+      });
+
+      logger.debug('Document view tracked', { documentId });
+    } catch (error) {
+      logger.error('Error tracking document view', { error, documentId });
+      // Don't throw error - tracking failure shouldn't block the request
+    }
   }
 
-  private async trackDocumentDownload(_documentId: string, _downloadData: any) {
-    // TODO: Track document download
+  /**
+   * Track document download activity
+   */
+  private async trackDocumentDownload(documentId: string, downloadData: any) {
+    try {
+      await Promise.all([
+        // Create activity record
+        prisma.documentActivity.create({
+          data: {
+            documentId,
+            userId: downloadData.userId,
+            activityType: 'DOWNLOAD',
+            metadata: {
+              userAgent: downloadData.userAgent,
+              referrer: downloadData.referrer,
+              downloadReason: downloadData.downloadReason
+            },
+            ipAddress: downloadData.ipAddress,
+            userAgent: downloadData.userAgent
+          }
+        }),
+        // Increment download count
+        prisma.document.update({
+          where: { id: documentId },
+          data: { downloadCount: { increment: 1 } }
+        })
+      ]);
+
+      logger.debug('Document download tracked', { documentId });
+    } catch (error) {
+      logger.error('Error tracking document download', { error, documentId });
+      // Don't throw error - tracking failure shouldn't block the request
+    }
   }
 
-  private async grantDocumentAccess(_documentId: string, _shareWith: any[], _accessData: any) {
-    // TODO: Grant document access to users
-    return [];
+  /**
+   * Grant document access to specified users
+   */
+  private async grantDocumentAccess(documentId: string, shareWith: any[], accessData: any) {
+    try {
+      const accessGrants = await Promise.all(
+        shareWith.map(async (share: any) => {
+          return await prisma.documentAccess.upsert({
+            where: {
+              documentId_userId: {
+                documentId,
+                userId: share.userId
+              }
+            },
+            create: {
+              documentId,
+              userId: share.userId,
+              grantedBy: accessData.grantedBy,
+              permission: share.permission || 'VIEW',
+              expiryDate: accessData.expiryDate ? new Date(accessData.expiryDate) : null,
+              message: accessData.message,
+              requireAcceptance: accessData.requireAcceptance || false
+            },
+            update: {
+              permission: share.permission || 'VIEW',
+              expiryDate: accessData.expiryDate ? new Date(accessData.expiryDate) : null,
+              message: accessData.message,
+              requireAcceptance: accessData.requireAcceptance || false
+            }
+          });
+        })
+      );
+
+      // Track sharing activity
+      await prisma.documentActivity.create({
+        data: {
+          documentId,
+          userId: accessData.grantedBy,
+          activityType: 'SHARE',
+          metadata: {
+            sharedWith: shareWith.map((s: any) => s.userId),
+            message: accessData.message
+          }
+        }
+      });
+
+      return accessGrants;
+    } catch (error) {
+      logger.error('Error granting document access', { error, documentId });
+      throw new AppError('Failed to grant document access', 500, 'ACCESS_GRANT_ERROR');
+    }
   }
 
-  private async findDocumentSignature(_documentId: string, _userId: string) {
-    // TODO: Find existing signature
-    return null;
+  /**
+   * Find existing signature for a document by a specific user
+   */
+  private async findDocumentSignature(documentId: string, userId: string) {
+    try {
+      return await prisma.documentSignatureRecord.findFirst({
+        where: {
+          documentId,
+          signedBy: userId
+        }
+      });
+    } catch (error) {
+      logger.error('Error finding document signature', { error, documentId, userId });
+      return null;
+    }
   }
 
-  private async createDocumentSignature(_documentId: string, signatureData: any) {
-    // TODO: Create document signature
-    return {
-      id: 'signature_123',
-      ...signatureData,
-      signedAt: new Date(),
-    };
+  /**
+   * Create a new document signature record
+   */
+  private async createDocumentSignature(documentId: string, signatureData: any) {
+    try {
+      const signature = await prisma.documentSignatureRecord.create({
+        data: {
+          documentId,
+          signedBy: signatureData.signedBy,
+          signatureData: signatureData.signatureData,
+          signatureType: signatureData.signatureType || 'ELECTRONIC',
+          signerName: signatureData.signerName,
+          signerTitle: signatureData.signerTitle,
+          ipAddress: signatureData.ipAddress,
+          location: signatureData.location,
+          signedAt: signatureData.signatureDate ? new Date(signatureData.signatureDate) : new Date()
+        }
+      });
+
+      logger.info('Document signature created', { signatureId: signature.id, documentId });
+      return signature;
+    } catch (error) {
+      logger.error('Error creating document signature', { error, documentId });
+      throw new AppError('Failed to create document signature', 500, 'SIGNATURE_CREATE_ERROR');
+    }
   }
 
-  private async findDocumentTemplateById(_id: string): Promise<DocumentTemplate | null> {
-    // TODO: Find document template
-    // For MVP, return null (template operations will be mocked)
-    return null;
+  /**
+   * Find document template by ID
+   */
+  private async findDocumentTemplateById(id: string): Promise<DocumentTemplate | null> {
+    try {
+      const template = await prisma.documentTemplate.findUnique({
+        where: { id }
+      });
+      return template as DocumentTemplate | null;
+    } catch (error) {
+      logger.error('Error finding document template', { error, id });
+      return null;
+    }
   }
 
+  /**
+   * Generate document from template with variable substitution
+   */
   private async generateDocument(generateData: any) {
-    // TODO: Generate document from template
-    return {
-      id: 'generated_doc_123',
-      fileName: generateData.outputFileName,
-      fileUrl: 'https://example.com/generated-document.pdf',
-      generatedAt: new Date(),
-    };
+    try {
+      const { template, fieldValues, outputFileName, format, generatedBy } = generateData;
+
+      // Simple variable substitution ({{variable}} syntax)
+      // In production, use a proper template engine
+      const fileContent = await this.substituteTemplateVariables(
+        template.templateUrl,
+        fieldValues
+      );
+
+      // Upload generated document
+      const fileBuffer = Buffer.from(fileContent);
+      const mockFile = {
+        originalname: outputFileName || `${template.name}_${Date.now()}.pdf`,
+        buffer: fileBuffer,
+        size: fileBuffer.length,
+        mimetype: format === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf'
+      } as any;
+
+      const fileUrl = await fileUploadService.uploadFile(mockFile, {
+        folder: 'generated-documents',
+        allowedTypes: ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        maxSize: 50 * 1024 * 1024
+      });
+
+      // Create document generation record
+      const generation = await prisma.documentGeneration.create({
+        data: {
+          templateId: template.id,
+          mergeData: fieldValues,
+          documentUrl: fileUrl,
+          status: 'DRAFT'
+        }
+      });
+
+      // Update template use count
+      await prisma.documentTemplate.update({
+        where: { id: template.id },
+        data: { useCount: { increment: 1 } }
+      });
+
+      return {
+        id: generation.id,
+        fileName: outputFileName,
+        fileUrl,
+        generatedAt: generation.generatedAt
+      };
+    } catch (error) {
+      logger.error('Error generating document', { error, templateId: generateData.template?.id });
+      throw new AppError('Failed to generate document from template', 500, 'DOCUMENT_GENERATION_ERROR');
+    }
   }
 
-  // Database operations (these would typically be in a service layer)
-  private async findDocumentById(_id: string): Promise<Document | null> {
-    // TODO: Implement database query
-    // For MVP, return null (document operations will be mocked)
-    return null;
+  /**
+   * Simple template variable substitution
+   */
+  private async substituteTemplateVariables(templateUrl: string, variables: any): Promise<string> {
+    // Placeholder implementation - in production, download template and process it
+    // For now, return a simple text representation
+    let content = `Document generated from template\n\n`;
+
+    for (const [key, value] of Object.entries(variables)) {
+      content += `${key}: ${value}\n`;
+    }
+
+    return content;
   }
 
+  // Database operations
+  /**
+   * Find document by ID with related data
+   */
+  private async findDocumentById(id: string): Promise<Document | null> {
+    try {
+      const document = await prisma.document.findUnique({
+        where: { id },
+        include: {
+          accessGrants: true,
+          versions: true,
+          documentSignatures: true
+        }
+      });
+
+      return document as Document | null;
+    } catch (error) {
+      logger.error('Error finding document', { error, id });
+      return null;
+    }
+  }
+
+  /**
+   * Create new document in database
+   */
   private async createDocumentInDb(documentData: any) {
-    // TODO: Implement database insert
-    return {
-      id: 'document_123',
-      ...documentData,
-      uploadedAt: new Date(),
+    try {
+      // Extract startupId from relatedEntity if not provided
+      let startupId = documentData.startupId;
+      if (!startupId && documentData.relatedEntity?.type === 'STARTUP') {
+        startupId = documentData.relatedEntity.id;
+      }
+
+      // If still no startupId, try to get from pitch
+      if (!startupId && documentData.pitchId) {
+        const pitch = await prisma.pitch.findUnique({
+          where: { id: documentData.pitchId },
+          select: { startupId: true }
+        });
+        if (pitch) {
+          startupId = pitch.startupId;
+        }
+      }
+
+      if (!startupId) {
+        throw new AppError('Startup ID is required for document creation', 400, 'STARTUP_ID_REQUIRED');
+      }
+
+      const document = await prisma.document.create({
+        data: {
+          startupId,
+          pitchId: documentData.pitchId || null,
+          name: documentData.fileName,
+          fileName: documentData.fileName,
+          filePath: documentData.fileUrl,
+          fileUrl: documentData.fileUrl,
+          fileType: this.mapDocumentTypeToFileType(documentData.documentType),
+          documentType: documentData.documentType,
+          fileSize: documentData.fileSize,
+          mimeType: documentData.mimeType,
+          isPublic: documentData.isPublic || false,
+          visibility: documentData.visibility || 'PRIVATE',
+          description: documentData.description,
+          tags: documentData.tags || [],
+          requiresSignature: documentData.requiresSignature || false,
+          expiryDate: documentData.expiryDate ? new Date(documentData.expiryDate) : null,
+          relatedEntity: documentData.relatedEntity || null,
+          uploadedBy: documentData.uploadedBy
+        }
+      });
+
+      logger.info('Document created in database', { documentId: document.id });
+      return document;
+    } catch (error) {
+      logger.error('Error creating document in database', { error });
+      throw error instanceof AppError ? error : new AppError('Failed to create document', 500, 'DOCUMENT_CREATE_ERROR');
+    }
+  }
+
+  /**
+   * Map documentType string to DocumentType enum
+   */
+  private mapDocumentTypeToFileType(documentType: string): any {
+    const typeMap: Record<string, string> = {
+      'PITCH_DECK': 'PITCH_DECK',
+      'BUSINESS_PLAN': 'BUSINESS_PLAN',
+      'FINANCIAL_PROJECTIONS': 'FINANCIAL_STATEMENT',
+      'FINANCIAL_STATEMENT': 'FINANCIAL_STATEMENT',
+      'INVESTMENT_AGREEMENT': 'LEGAL_DOCUMENT',
+      'KYC': 'OTHER',
+      'PASSPORT': 'OTHER',
+      'DRIVERS_LICENSE': 'OTHER'
     };
+    return typeMap[documentType] || 'OTHER';
   }
 
-  private async updateDocumentInDb(_id: string, updateData: any) {
-    // TODO: Implement database update
-    return {
-      id: _id,
-      ...updateData,
-      updatedAt: new Date(),
-    };
+  /**
+   * Update document in database
+   */
+  private async updateDocumentInDb(id: string, updateData: any) {
+    try {
+      const document = await prisma.document.update({
+        where: { id },
+        data: {
+          name: updateData.fileName,
+          fileName: updateData.fileName,
+          documentType: updateData.documentType,
+          visibility: updateData.visibility,
+          description: updateData.description,
+          tags: updateData.tags,
+          isPublic: updateData.isPublic,
+          requiresSignature: updateData.requiresSignature,
+          expiryDate: updateData.expiryDate ? new Date(updateData.expiryDate) : undefined
+        }
+      });
+
+      logger.info('Document updated in database', { documentId: id });
+      return document;
+    } catch (error) {
+      logger.error('Error updating document in database', { error, id });
+      throw new AppError('Failed to update document', 500, 'DOCUMENT_UPDATE_ERROR');
+    }
   }
 
-  private async deleteDocumentFromDb(_id: string) {
-    // TODO: Implement database delete
+  /**
+   * Delete document from database
+   */
+  private async deleteDocumentFromDb(id: string) {
+    try {
+      await prisma.document.delete({
+        where: { id }
+      });
+
+      logger.info('Document deleted from database', { documentId: id });
+    } catch (error) {
+      logger.error('Error deleting document from database', { error, id });
+      throw new AppError('Failed to delete document', 500, 'DOCUMENT_DELETE_ERROR');
+    }
   }
 
-  private async createDocumentVersionInDb(_documentId: string, versionData: any) {
-    // TODO: Implement database insert
-    return {
-      id: 'version_123',
-      documentId: _documentId,
-      ...versionData,
-      createdAt: new Date(),
-    };
+  /**
+   * Create new document version
+   */
+  private async createDocumentVersionInDb(documentId: string, versionData: any) {
+    try {
+      // Get current document to determine next version number
+      const document = await prisma.document.findUnique({
+        where: { id: documentId },
+        include: {
+          versions: {
+            orderBy: { version: 'desc' },
+            take: 1
+          }
+        }
+      });
+
+      if (!document) {
+        throw new AppError('Document not found', 404, 'DOCUMENT_NOT_FOUND');
+      }
+
+      const nextVersion = versionData.version || ((document.versions[0]?.version || document.version) + 1);
+
+      const version = await prisma.documentVersion.create({
+        data: {
+          documentId,
+          version: nextVersion,
+          fileName: versionData.fileName,
+          fileUrl: versionData.fileUrl,
+          fileSize: versionData.fileSize,
+          mimeType: versionData.mimeType,
+          changelog: versionData.changelog,
+          isMajorVersion: versionData.isMajorVersion || false,
+          createdBy: versionData.createdBy
+        }
+      });
+
+      // Update document's current version
+      await prisma.document.update({
+        where: { id: documentId },
+        data: {
+          version: nextVersion,
+          fileUrl: versionData.fileUrl,
+          fileName: versionData.fileName
+        }
+      });
+
+      // Track version creation
+      await prisma.documentActivity.create({
+        data: {
+          documentId,
+          userId: versionData.createdBy,
+          activityType: 'VERSION_CREATE',
+          metadata: {
+            version: nextVersion,
+            changelog: versionData.changelog
+          }
+        }
+      });
+
+      logger.info('Document version created', { documentId, versionId: version.id });
+      return version;
+    } catch (error) {
+      logger.error('Error creating document version', { error, documentId });
+      throw error instanceof AppError ? error : new AppError('Failed to create document version', 500, 'VERSION_CREATE_ERROR');
+    }
   }
 
+  /**
+   * Create document template
+   */
   private async createDocumentTemplateInDb(templateData: any) {
-    // TODO: Implement database insert
-    return {
-      id: 'template_123',
-      ...templateData,
-      createdAt: new Date(),
-    };
+    try {
+      const template = await prisma.documentTemplate.create({
+        data: {
+          name: templateData.name,
+          documentType: templateData.documentType,
+          category: templateData.category || 'OTHER',
+          jurisdictions: templateData.jurisdictions || [],
+          version: templateData.version || '1.0',
+          templateUrl: templateData.fileUrl,
+          fileUrl: templateData.fileUrl,
+          variableFields: templateData.variableFields || {},
+          isPublic: templateData.isPublic || false,
+          createdBy: templateData.createdBy
+        }
+      });
+
+      logger.info('Document template created', { templateId: template.id });
+      return template;
+    } catch (error) {
+      logger.error('Error creating document template', { error });
+      throw new AppError('Failed to create document template', 500, 'TEMPLATE_CREATE_ERROR');
+    }
   }
 
-  private async getDocumentsList(_filters: any) {
-    // TODO: Implement database query with filters
-    return {
-      documents: [],
-      pagination: {
-        page: 1,
-        limit: 20,
-        total: 0,
-        totalPages: 0,
-      },
-    };
+  /**
+   * Get paginated and filtered list of documents
+   */
+  private async getDocumentsList(filters: any) {
+    try {
+      const {
+        documentType,
+        visibility,
+        relatedEntity,
+        uploaderId,
+        isPublic,
+        requiresSignature,
+        hasExpiry,
+        search,
+        tags,
+        uploadedAfter,
+        uploadedBefore,
+        page = 1,
+        limit = 20,
+        sortBy = 'createdAt',
+        sortOrder = 'desc'
+      } = filters;
+
+      // Build where clause
+      const where: any = {};
+
+      if (documentType) {
+        where.documentType = documentType;
+      }
+
+      if (visibility) {
+        where.visibility = visibility;
+      }
+
+      if (uploaderId) {
+        where.uploadedBy = uploaderId;
+      }
+
+      if (typeof isPublic === 'boolean') {
+        where.isPublic = isPublic;
+      }
+
+      if (typeof requiresSignature === 'boolean') {
+        where.requiresSignature = requiresSignature;
+      }
+
+      if (hasExpiry) {
+        where.expiryDate = { not: null };
+      }
+
+      if (search) {
+        where.OR = [
+          { name: { contains: search, mode: 'insensitive' } },
+          { fileName: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } }
+        ];
+      }
+
+      if (tags && tags.length > 0) {
+        where.tags = { hasSome: tags };
+      }
+
+      if (uploadedAfter) {
+        where.uploadedAt = { ...where.uploadedAt, gte: new Date(uploadedAfter) };
+      }
+
+      if (uploadedBefore) {
+        where.uploadedAt = { ...where.uploadedAt, lte: new Date(uploadedBefore) };
+      }
+
+      if (relatedEntity) {
+        const relEntity = typeof relatedEntity === 'string' ? JSON.parse(relatedEntity) : relatedEntity;
+        if (relEntity.type === 'STARTUP') {
+          where.startupId = relEntity.id;
+        } else if (relEntity.type === 'PITCH') {
+          where.pitchId = relEntity.id;
+        }
+      }
+
+      // Get total count
+      const total = await prisma.document.count({ where });
+
+      // Get documents
+      const documents = await prisma.document.findMany({
+        where,
+        include: {
+          uploader: {
+            select: {
+              id: true,
+              name: true,
+              email: true
+            }
+          },
+          documentSignatures: {
+            select: {
+              id: true,
+              signerName: true,
+              signedAt: true
+            }
+          }
+        },
+        orderBy: { [sortBy]: sortOrder },
+        skip: (page - 1) * limit,
+        take: limit
+      });
+
+      return {
+        documents,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit)
+        }
+      };
+    } catch (error) {
+      logger.error('Error getting documents list', { error, filters });
+      throw new AppError('Failed to retrieve documents', 500, 'DOCUMENTS_LIST_ERROR');
+    }
   }
 }
 

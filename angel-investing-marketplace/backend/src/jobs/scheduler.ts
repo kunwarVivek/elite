@@ -4,6 +4,7 @@ import { logger } from '../config/logger.js';
 import { env } from '../config/environment.js';
 import { interestAccrualJob } from './interest-accrual.job.js';
 import { conversionTriggerJob } from './conversion-trigger.job.js';
+import { analyticsSnapshotJob } from './analytics-snapshot.job.js';
 
 /**
  * Redis connection for BullMQ
@@ -56,6 +57,25 @@ export const conversionTriggerQueue = new Queue('conversion-trigger', {
   },
 });
 
+export const analyticsSnapshotQueue = new Queue('analytics-snapshot', {
+  connection: redisConnection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: 'exponential',
+      delay: 5000,
+    },
+    removeOnComplete: {
+      count: 100,
+      age: 7 * 24 * 3600,
+    },
+    removeOnFail: {
+      count: 500,
+      age: 30 * 24 * 3600,
+    },
+  },
+});
+
 /**
  * Job Scheduler
  *
@@ -89,6 +109,11 @@ export class JobScheduler {
       });
       this.schedulers.push(conversionTriggerScheduler);
 
+      const analyticsSnapshotScheduler = new QueueScheduler('analytics-snapshot', {
+        connection: redisConnection,
+      });
+      this.schedulers.push(analyticsSnapshotScheduler);
+
       // Initialize workers
       const interestAccrualWorker = new Worker(
         'interest-accrual',
@@ -113,6 +138,19 @@ export class JobScheduler {
         {
           connection: redisConnection,
           concurrency: 1,
+        }
+      );
+
+      const analyticsSnapshotWorker = new Worker(
+        'analytics-snapshot',
+        async (job) => {
+          logger.info('Processing analytics snapshot job', { jobId: job.id });
+          const result = await analyticsSnapshotJob();
+          return result;
+        },
+        {
+          connection: redisConnection,
+          concurrency: 1, // Process one at a time to avoid overload
         }
       );
 
@@ -148,7 +186,23 @@ export class JobScheduler {
         });
       });
 
-      this.workers.push(interestAccrualWorker, conversionTriggerWorker);
+      // Set up event handlers for analytics snapshot worker
+      analyticsSnapshotWorker.on('completed', (job, result) => {
+        logger.info('Analytics snapshot job completed', {
+          jobId: job.id,
+          result,
+        });
+      });
+
+      analyticsSnapshotWorker.on('failed', (job, error) => {
+        logger.error('Analytics snapshot job failed', {
+          jobId: job?.id,
+          error: error.message,
+          stack: error.stack,
+        });
+      });
+
+      this.workers.push(interestAccrualWorker, conversionTriggerWorker, analyticsSnapshotWorker);
 
       // Schedule recurring jobs
       // Interest accrual: Daily at 1:00 AM EST (0 1 * * *)
@@ -178,6 +232,20 @@ export class JobScheduler {
         }
       );
       logger.info('✅ Conversion trigger job scheduled (every 6 hours)');
+
+      // Analytics snapshot: Daily at midnight (0 0 * * *)
+      await analyticsSnapshotQueue.add(
+        'daily-analytics-snapshot',
+        {},
+        {
+          repeat: {
+            pattern: '0 0 * * *',
+            tz: 'America/New_York',
+          },
+          jobId: 'daily-analytics-snapshot',
+        }
+      );
+      logger.info('✅ Analytics snapshot job scheduled (daily at midnight)');
 
       this.initialized = true;
       logger.info(`🎯 Job scheduler initialized with ${this.workers.length} workers`);
@@ -222,9 +290,10 @@ export class JobScheduler {
    */
   async getJobStatus() {
     try {
-      const [interestAccrualCounts, conversionTriggerCounts] = await Promise.all([
+      const [interestAccrualCounts, conversionTriggerCounts, analyticsSnapshotCounts] = await Promise.all([
         interestAccrualQueue.getJobCounts(),
         conversionTriggerQueue.getJobCounts(),
+        analyticsSnapshotQueue.getJobCounts(),
       ]);
 
       return {
@@ -238,6 +307,10 @@ export class JobScheduler {
           conversionTrigger: {
             name: 'conversion-trigger',
             counts: conversionTriggerCounts,
+          },
+          analyticsSnapshot: {
+            name: 'analytics-snapshot',
+            counts: analyticsSnapshotCounts,
           },
         },
       };
@@ -262,6 +335,9 @@ export class JobScheduler {
           break;
         case 'conversionTrigger':
           result = await conversionTriggerQueue.add('manual-run', {}, { priority: 1 });
+          break;
+        case 'analyticsSnapshot':
+          result = await analyticsSnapshotQueue.add('manual-run', {}, { priority: 1 });
           break;
         default:
           throw new Error(`Unknown job: ${jobName}`);
@@ -290,6 +366,9 @@ export class JobScheduler {
           break;
         case 'conversionTrigger':
           queue = conversionTriggerQueue;
+          break;
+        case 'analyticsSnapshot':
+          queue = analyticsSnapshotQueue;
           break;
         default:
           throw new Error(`Unknown queue: ${queueName}`);
