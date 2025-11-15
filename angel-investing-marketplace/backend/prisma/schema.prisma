@@ -361,7 +361,7 @@ model Message {
   pitch      Pitch?      @relation(fields: [pitchId], references: [id], onDelete: Cascade)
   investment Investment? @relation(fields: [investmentId], references: [id], onDelete: Cascade)
 
-  // Indexes
+  // Indexes for message queries
   @@index([senderId])
   @@index([receiverId])
   @@index([pitchId])
@@ -370,6 +370,10 @@ model Message {
   @@index([createdAt])
   @@index([senderId, receiverId])
   @@index([isRead, createdAt])
+  @@index([receiverId, isRead])
+  @@index([receiverId, isRead, createdAt])
+  @@index([senderId, createdAt])
+  @@index([receiverId, createdAt])
   @@map("messages")
 }
 
@@ -1619,6 +1623,7 @@ enum NotificationType {
   SYNDICATE
   SYSTEM
   PAYMENT
+  BOARD_MEETING
 }
 
 enum NotificationPriority {

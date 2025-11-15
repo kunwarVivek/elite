@@ -33,6 +33,14 @@ import investorRightsRoutes from './investor-rights.routes.js';
 import exitManagementRoutes from './exit-management.routes.js';
 import { subscriptionRouter, subscriptionPlansRouter } from './subscription.routes.js';
 import webhookRoutes from './webhook.routes.js';
+import socialCardRoutes from './social-card.routes.js';
+import investmentClubRoutes from './investment-club.routes.js';
+import boardRoutes from './board.routes.js';
+import forumRoutes from './forum.routes.js';
+import followOnRoutes from './follow-on.routes.js';
+import reputationRoutes from './reputation.routes.js';
+import supportRoutes from './support.routes.js';
+import apiKeyRoutes from './api-key.routes.js';
 
 // Create main router
 const router = Router();
@@ -84,6 +92,14 @@ router.get('/', (req, res) => {
         exitEvents: '/api/exit-events',
         subscriptions: '/api/subscriptions',
         subscriptionPlans: '/api/subscription-plans',
+        socialCards: '/api/social-cards',
+        investmentClubs: '/api/clubs',
+        board: '/api/board',
+        forums: '/api/forums',
+        followOnInvestments: '/api/follow-on',
+        reputation: '/api/reputation',
+        support: '/api/support',
+        apiKeys: '/api/api-keys',
       },
     },
   });
@@ -126,6 +142,14 @@ router.use('/investor-rights', apiVersion('v1'), investorRightsRoutes);
 router.use('/exit-events', apiVersion('v1'), exitManagementRoutes);
 router.use('/subscriptions', apiVersion('v1'), subscriptionRouter);
 router.use('/subscription-plans', apiVersion('v1'), subscriptionPlansRouter);
+router.use('/social-cards', apiVersion('v1'), socialCardRoutes);
+router.use('/clubs', apiVersion('v1'), investmentClubRoutes);
+router.use('/board', apiVersion('v1'), boardRoutes);
+router.use('/forums', apiVersion('v1'), forumRoutes);
+router.use('/follow-on', apiVersion('v1'), followOnRoutes);
+router.use('/reputation', apiVersion('v1'), reputationRoutes);
+router.use('/support', apiVersion('v1'), supportRoutes);
+router.use('/api-keys', apiVersion('v1'), apiKeyRoutes);
 
 // API documentation endpoint (placeholder)
 router.get('/docs', (req, res) => {

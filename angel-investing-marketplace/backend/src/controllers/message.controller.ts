@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { AppError } from '../middleware/errorHandler.js';
 import { sendSuccess } from '../utils/response.js';
 import { logger } from '../config/logger.js';
+import { messageService } from '../services/message.service.js';
 
 // Types for better type safety
 interface AuthRequest extends Request {
@@ -294,58 +295,35 @@ class MessageController {
 
 
   // Helper methods
-  private async sendMessageNotifications(_message: any): Promise<void> {
-    // TODO: Send push notifications, emails, etc.
-    // This would integrate with the notification service
+  private async sendMessageNotifications(message: any): Promise<void> {
+    // Messages are already sent via WebSocket in the service
+    // Additional notification methods (email, push) can be added here
+    logger.debug('Message notifications handled by service', { messageId: message.id });
   }
 
-  // Database operations (these would typically be in a service layer)
-  private async findUserById(_id: string): Promise<any | null> {
-    // TODO: Implement database query
-    return null;
+  // Database operations (delegated to service layer)
+  private async findUserById(id: string): Promise<any | null> {
+    return await messageService.findUserById(id);
   }
 
-  private async findMessageById(_id: string): Promise<any | null> {
-    // TODO: Implement database query
-    return null;
+  private async findMessageById(id: string): Promise<any | null> {
+    return await messageService.findMessageById(id);
   }
 
-  private async createMessage(_messageData: any): Promise<any> {
-    // TODO: Implement database insert
-    return {
-      id: 'message_123',
-      createdAt: new Date(),
-    };
+  private async createMessage(messageData: any): Promise<any> {
+    return await messageService.createMessage(messageData);
   }
 
-  private async markMessagesAsRead(_messageIds: string[], _userId: string): Promise<void> {
-    // TODO: Implement database update
+  private async markMessagesAsRead(messageIds: string[], userId: string): Promise<void> {
+    await messageService.markMessagesAsRead(messageIds, userId);
   }
 
-  private async getConversationsList(_userId: string, _filters: any): Promise<any> {
-    // TODO: Implement database query with filters
-    return {
-      conversations: [],
-      pagination: {
-        page: 1,
-        limit: 20,
-        total: 0,
-        totalPages: 0,
-      },
-    };
+  private async getConversationsList(userId: string, filters: any): Promise<any> {
+    return await messageService.getConversationsList(userId, filters);
   }
 
-  private async getMessagesList(_userId: string, _filters: any): Promise<any> {
-    // TODO: Implement database query with filters
-    return {
-      messages: [],
-      pagination: {
-        page: 1,
-        limit: 20,
-        total: 0,
-        totalPages: 0,
-      },
-    };
+  private async getMessagesList(userId: string, filters: any): Promise<any> {
+    return await messageService.getMessagesList(userId, filters);
   }
 
   // Archive conversation
@@ -356,10 +334,13 @@ class MessageController {
         throw new AppError('User not authenticated', 401, 'NOT_AUTHENTICATED');
       }
 
-      const { id: _id } = req.params;
-      // TODO: Implement conversation archiving logic
+      const { id: participantId } = req.params;
 
-      sendSuccess(res, { archived: true }, 'Conversation archived successfully');
+      await messageService.archiveConversation(userId, participantId);
+
+      logger.info('Conversation archived', { userId, participantId });
+
+      sendSuccess(res, { archived: true, participantId }, 'Conversation archived successfully');
     } catch (error) {
       next(error);
     }
@@ -373,10 +354,27 @@ class MessageController {
         throw new AppError('User not authenticated', 401, 'NOT_AUTHENTICATED');
       }
 
-      const { action: _action, messageIds } = req.body;
-      // TODO: Implement bulk action logic
+      const { action, messageIds } = req.body;
 
-      sendSuccess(res, { processed: messageIds.length }, 'Bulk action completed successfully');
+      // Validate action
+      if (!['read', 'archive', 'delete'].includes(action)) {
+        throw new AppError('Invalid action type', 400, 'INVALID_ACTION');
+      }
+
+      // Validate messageIds
+      if (!Array.isArray(messageIds) || messageIds.length === 0) {
+        throw new AppError('Message IDs are required', 400, 'INVALID_REQUEST');
+      }
+
+      const processedCount = await messageService.bulkMessageAction(userId, action, messageIds);
+
+      logger.info('Bulk message action completed', { userId, action, processedCount });
+
+      sendSuccess(res, {
+        action,
+        processed: processedCount,
+        requested: messageIds.length
+      }, 'Bulk action completed successfully');
     } catch (error) {
       next(error);
     }
@@ -390,10 +388,24 @@ class MessageController {
         throw new AppError('User not authenticated', 401, 'NOT_AUTHENTICATED');
       }
 
-      const { name, content } = req.body;
-      // TODO: Implement template creation logic
+      const { name, category, subject, content } = req.body;
 
-      sendSuccess(res, { id: 'template_123', name, content }, 'Message template created successfully', 201);
+      // Validate required fields
+      if (!name || !content) {
+        throw new AppError('Name and content are required', 400, 'INVALID_REQUEST');
+      }
+
+      const template = await messageService.createMessageTemplate(
+        userId,
+        name,
+        category || 'GENERAL',
+        subject,
+        content
+      );
+
+      logger.info('Message template created', { userId, templateId: template.id });
+
+      sendSuccess(res, template, 'Message template created successfully', 201);
     } catch (error) {
       next(error);
     }
@@ -407,10 +419,22 @@ class MessageController {
         throw new AppError('User not authenticated', 401, 'NOT_AUTHENTICATED');
       }
 
-      const { templateId: _templateId, variables: _variables } = req.body;
-      // TODO: Implement template usage logic
+      const { templateId, variables } = req.body;
 
-      sendSuccess(res, { content: 'Template content with variables' }, 'Template retrieved successfully');
+      // Validate required fields
+      if (!templateId) {
+        throw new AppError('Template ID is required', 400, 'INVALID_REQUEST');
+      }
+
+      const result = await messageService.useMessageTemplate(
+        userId,
+        templateId,
+        variables || {}
+      );
+
+      logger.info('Message template used', { userId, templateId });
+
+      sendSuccess(res, result, 'Template retrieved successfully');
     } catch (error) {
       next(error);
     }
@@ -424,9 +448,9 @@ class MessageController {
         throw new AppError('User not authenticated', 401, 'NOT_AUTHENTICATED');
       }
 
-      // TODO: Implement preferences retrieval logic
+      const preferences = await messageService.getMessagePreferences(userId);
 
-      sendSuccess(res, { emailNotifications: true, pushNotifications: true }, 'Notification preferences retrieved successfully');
+      sendSuccess(res, preferences, 'Notification preferences retrieved successfully');
     } catch (error) {
       next(error);
     }
@@ -441,9 +465,12 @@ class MessageController {
       }
 
       const preferences = req.body;
-      // TODO: Implement preferences update logic
 
-      sendSuccess(res, preferences, 'Notification preferences updated successfully');
+      const updatedPreferences = await messageService.updateMessagePreferences(userId, preferences);
+
+      logger.info('Message preferences updated', { userId });
+
+      sendSuccess(res, updatedPreferences, 'Notification preferences updated successfully');
     } catch (error) {
       next(error);
     }
@@ -457,10 +484,159 @@ class MessageController {
         throw new AppError('User not authenticated', 401, 'NOT_AUTHENTICATED');
       }
 
-      const { id } = req.params;
-      // TODO: Implement conversation retrieval logic
+      const { id: participantId } = req.params;
+      const { page, limit } = req.query as any;
 
-      sendSuccess(res, { id, participants: [], messages: [] }, 'Conversation retrieved successfully');
+      const conversation = await messageService.getConversation(
+        userId,
+        participantId,
+        parseInt(page) || 1,
+        parseInt(limit) || 50
+      );
+
+      sendSuccess(res, {
+        participantId,
+        participant: conversation.participant,
+        messages: conversation.messages,
+        unreadCount: conversation.unreadCount,
+        pagination: conversation.pagination,
+      }, 'Conversation retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Search messages
+  async searchMessages(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        throw new AppError('User not authenticated', 401, 'NOT_AUTHENTICATED');
+      }
+
+      const { query, page, limit } = req.query as any;
+
+      if (!query) {
+        throw new AppError('Search query is required', 400, 'INVALID_REQUEST');
+      }
+
+      const result = await messageService.searchMessages(
+        userId,
+        query,
+        parseInt(page) || 1,
+        parseInt(limit) || 20
+      );
+
+      sendSuccess(res, {
+        query,
+        messages: result.messages,
+        pagination: result.pagination,
+      }, 'Messages searched successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Get unread count
+  async getUnreadCount(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        throw new AppError('User not authenticated', 401, 'NOT_AUTHENTICATED');
+      }
+
+      const unreadCount = await messageService.getUnreadCount(userId);
+
+      sendSuccess(res, { unreadCount }, 'Unread count retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Delete conversation
+  async deleteConversation(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        throw new AppError('User not authenticated', 401, 'NOT_AUTHENTICATED');
+      }
+
+      const { id: participantId } = req.params;
+
+      await messageService.deleteConversation(userId, participantId);
+
+      logger.info('Conversation deleted', { userId, participantId });
+
+      sendSuccess(res, { deleted: true, participantId }, 'Conversation deleted successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Block user
+  async blockUser(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        throw new AppError('User not authenticated', 401, 'NOT_AUTHENTICATED');
+      }
+
+      const { userId: blockedUserId } = req.body;
+
+      if (!blockedUserId) {
+        throw new AppError('User ID is required', 400, 'INVALID_REQUEST');
+      }
+
+      if (userId === blockedUserId) {
+        throw new AppError('Cannot block yourself', 400, 'INVALID_REQUEST');
+      }
+
+      await messageService.blockUser(userId, blockedUserId);
+
+      logger.info('User blocked', { userId, blockedUserId });
+
+      sendSuccess(res, { blocked: true, blockedUserId }, 'User blocked successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Report message
+  async reportMessage(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        throw new AppError('User not authenticated', 401, 'NOT_AUTHENTICATED');
+      }
+
+      const { id: messageId } = req.params;
+      const { reason } = req.body;
+
+      if (!reason) {
+        throw new AppError('Report reason is required', 400, 'INVALID_REQUEST');
+      }
+
+      await messageService.reportMessage(userId, messageId, reason);
+
+      logger.info('Message reported', { userId, messageId, reason });
+
+      sendSuccess(res, { reported: true, messageId }, 'Message reported successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Get message templates
+  async getMessageTemplates(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        throw new AppError('User not authenticated', 401, 'NOT_AUTHENTICATED');
+      }
+
+      const templates = await messageService.getMessageTemplates(userId);
+
+      sendSuccess(res, { templates }, 'Message templates retrieved successfully');
     } catch (error) {
       next(error);
     }

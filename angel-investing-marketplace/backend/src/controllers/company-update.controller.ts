@@ -161,6 +161,73 @@ export class CompanyUpdateController {
       next(error);
     }
   }
+
+  /**
+   * Get update with social card
+   * Convenience method that includes social card data in the response
+   */
+  async getUpdateWithSocialCard(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { id } = req.params;
+      const userId = req.user?.id;
+
+      const update = await companyUpdateService.getUpdateById(id, userId);
+
+      // Check if update has social card in metadata
+      const metadata = (update as any).metadata || {};
+      const socialCard = metadata.socialCard || null;
+
+      sendSuccess(res, {
+        ...update,
+        socialCard,
+      }, 'Update retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get updates with social engagement stats
+   * Convenience method that includes social share counts
+   */
+  async getUpdatesWithSocialStats(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { limit = '20', offset = '0', ...filters } = req.query;
+
+      const result = await companyUpdateService.getUpdates(
+        filters as any,
+        parseInt(limit as string),
+        parseInt(offset as string)
+      );
+
+      // Enhance updates with social stats
+      const updatesWithStats = result.updates.map((update: any) => {
+        const metadata = update.metadata || {};
+        const socialShares = metadata.socialShares || {};
+
+        let totalShares = 0;
+        for (const platform in socialShares) {
+          totalShares += socialShares[platform]?.count || 0;
+        }
+
+        return {
+          ...update,
+          socialStats: {
+            totalShares,
+            hasSocialCard: !!metadata.socialCard,
+            platforms: Object.keys(socialShares),
+          },
+        };
+      });
+
+      sendSuccess(res, {
+        ...result,
+        updates: updatesWithStats,
+      }, 'Updates retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const companyUpdateController = new CompanyUpdateController();
